@@ -6,8 +6,6 @@ This project contributes to SDG 11 by promoting sustainable waste management pra
 Renew + Innovate through recycling and art
 
 ## Project Structure
-
-mary@outside-of-time:~/AndroidStudioProjects/renova$ tree -d
 .
 ├── android
 │   ├── app
