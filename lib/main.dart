@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import './features/navigation/admin_navigation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // await Firebase.initializeApp(
   //   options: DefaultFirebaseOptions.currentPlatform,
   // );
-   try {
+  try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
@@ -15,7 +16,7 @@ void main() async {
   } catch (e) {
     print("❌ Firebase initialization failed: $e");
   }
-  
+
   runApp(MyApp());
 }
 
@@ -31,9 +32,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: Center(
-        child: Text('Welcome to Renova!'),
-      ),
+      home: AdminNavigation(),
     );
   }
 }
