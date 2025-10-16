@@ -10,6 +10,19 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const MyApp());
+  // await Firebase.initializeApp(
+  //   options: DefaultFirebaseOptions.currentPlatform,
+  // );
+   try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print("✅ Firebase initialized successfully!");
+  } catch (e) {
+    print("❌ Firebase initialization failed: $e");
+  }
+  
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -43,6 +56,11 @@ class MyApp extends StatelessWidget {
         ),
       ),
       home: const AuthWrapper(),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+      ),
+      home: Center(
+        child: Text('Welcome to Renova!'),
+      ),
     );
   }
 }
