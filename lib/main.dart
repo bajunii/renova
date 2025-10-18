@@ -6,23 +6,14 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  runApp(const MyApp());
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
-   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     print("✅ Firebase initialized successfully!");
   } catch (e) {
     print("❌ Firebase initialization failed: $e");
   }
-  
-  runApp(MyApp());
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -56,11 +47,8 @@ class MyApp extends StatelessWidget {
         ),
       ),
       home: const AuthWrapper(),
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-      ),
-      home: Center(
-        child: Text('Welcome to Renova!'),
-      ),
+      // Uncomment for quick local testing instead of AuthWrapper:
+      // home: const Center(child: Text('Welcome to Renova!')),
     );
   }
 }
