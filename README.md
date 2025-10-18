@@ -4,3 +4,49 @@ This project contributes to SDG 11 by promoting sustainable waste management pra
 
 
 Renew + Innovate through recycling and art
+
+## Project Structure
+.
+├── android
+│   ├── app
+│   └── gradle
+├── assets
+├── build
+├── docs
+├── ios
+├── lib
+│   ├── main.dart
+│   ├── config
+│   ├── core
+│   │   ├── services
+│   │   ├── theme
+│   │   └── utils
+│   ├── features
+│   │   ├── auth
+│   │   │   ├── pages
+│   │   │   └── widgets
+│   │   ├── business
+│   │   │   ├── pages
+│   │   │   └── widgets
+│   │   ├── dashboard
+│   │   │   ├── pages
+│   │   │   └── widgets
+│   │   ├── groups
+│   │   │   ├── pages
+│   │   │   └── widgets
+│   │   └── members
+│   │       ├── pages
+│   │       └── widgets
+│   ├── models
+│   └── shared
+│       ├── models
+│       └── widgets
+├── linux
+├── macos
+├── test
+├── web
+├── windows
+├── pubspec.lock
+├── pubspec.yaml
+├── README.md
+└──renova.iml            
