@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/user_role.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -40,6 +41,7 @@ class AuthService {
     String email,
     String password,
     String displayName,
+    UserRole role,
   ) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
@@ -51,7 +53,7 @@ class AuthService {
       await result.user?.updateDisplayName(displayName);
 
       // Create user document in Firestore
-      await _createUserDocument(result.user!, displayName);
+      await _createUserDocument(result.user!, displayName, role);
 
       return result;
     } on FirebaseAuthException catch (e) {
@@ -82,11 +84,16 @@ class AuthService {
   }
 
   // Create user document in Firestore
-  Future<void> _createUserDocument(User user, String displayName) async {
+  Future<void> _createUserDocument(
+    User user,
+    String displayName,
+    UserRole role,
+  ) async {
     await _firestore.collection('users').doc(user.uid).set({
       'uid': user.uid,
       'email': user.email,
       'displayName': displayName,
+      'role': role.name,
       'createdAt': FieldValue.serverTimestamp(),
       'lastLoginAt': FieldValue.serverTimestamp(),
       'profileImageUrl': '',
@@ -120,6 +127,31 @@ class AuthService {
       await _firestore.collection('users').doc(user.uid).update(updateData);
     } catch (e) {
       throw 'Failed to update profile. Please try again.';
+    }
+  }
+
+  // Get user role from Firestore
+  Future<UserRole?> getUserRole() async {
+    try {
+      final user = currentUser;
+      if (user == null) return null;
+
+      DocumentSnapshot doc = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (doc.exists) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        String? roleString = data['role'] as String?;
+        if (roleString != null) {
+          return UserRole.fromString(roleString);
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error getting user role: $e');
+      return null;
     }
   }
 

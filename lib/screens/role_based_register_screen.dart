@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_screen.dart';
-import '../services/auth_service.dart';
 import '../models/user_role.dart';
+import '../services/auth_service.dart';
+import 'dashboards/member_dashboard.dart';
+import 'dashboards/group_dashboard.dart';
+import 'dashboards/business_dashboard.dart';
 
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+class RoleBasedRegisterScreen extends StatefulWidget {
+  const RoleBasedRegisterScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  State<RoleBasedRegisterScreen> createState() =>
+      _RoleBasedRegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -22,6 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
+  UserRole? _selectedRole;
 
   @override
   void dispose() {
@@ -33,18 +37,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate() && _selectedRole != null) {
       setState(() {
         _isLoading = true;
       });
 
       try {
-        // Register with Firebase Authentication (default to member role)
+        // Register with Firebase Authentication
         UserCredential? result = await _authService.registerWithEmailPassword(
           _emailController.text,
           _passwordController.text,
           _nameController.text,
-          UserRole.member,
+          _selectedRole!,
         );
 
         if (result != null && mounted) {
@@ -56,10 +60,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           );
 
-          // Navigate to dashboard
+          // Navigate to appropriate dashboard based on role
+          Widget dashboard;
+          switch (_selectedRole!) {
+            case UserRole.member:
+              dashboard = const MemberDashboard();
+              break;
+            case UserRole.group:
+              dashboard = const GroupDashboard();
+              break;
+            case UserRole.business:
+              dashboard = const BusinessDashboard();
+              break;
+          }
+
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            MaterialPageRoute(builder: (context) => dashboard),
           );
         }
       } catch (e) {
@@ -75,6 +92,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           });
         }
       }
+    } else if (_selectedRole == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an account type'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -118,13 +142,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Join Renova today',
+                    'Choose your account type and join Renova',
                     style: Theme.of(
                       context,
                     ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 32),
+
+                  // Role Selection
+                  Text(
+                    'Account Type',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ...UserRole.values.map(
+                    (role) => Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: _selectedRole == role ? 4 : 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: _selectedRole == role
+                              ? Theme.of(context).primaryColor
+                              : Colors.grey[300]!,
+                          width: _selectedRole == role ? 2 : 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        leading: Icon(
+                          role.icon,
+                          size: 32,
+                          color: _selectedRole == role
+                              ? Theme.of(context).primaryColor
+                              : Colors.grey[600],
+                        ),
+                        title: Text(
+                          role.displayName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _selectedRole == role
+                                ? Theme.of(context).primaryColor
+                                : Colors.grey[800],
+                          ),
+                        ),
+                        subtitle: Text(
+                          role.description,
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        trailing: Radio<UserRole>(
+                          value: role,
+                          groupValue: _selectedRole,
+                          onChanged: (UserRole? value) {
+                            setState(() {
+                              _selectedRole = value;
+                            });
+                          },
+                        ),
+                        onTap: () {
+                          setState(() {
+                            _selectedRole = role;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
                   // Name Field
                   TextFormField(

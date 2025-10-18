@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_screen.dart';
-import 'register_screen.dart';
 import '../services/auth_service.dart';
+import '../services/navigation_service.dart';
+import 'role_based_register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       try {
+        print('🔐 Starting login process...');
+
         // Sign in with Firebase Authentication
         UserCredential? result = await _authService.signInWithEmailPassword(
           _emailController.text,
@@ -41,16 +43,33 @@ class _LoginScreenState extends State<LoginScreen> {
         );
 
         if (result != null && mounted) {
+          print('✅ Login successful, getting user role...');
+
           // Update last login time
           await _authService.updateLastLogin();
 
-          // Navigate to dashboard
+          // Show role loading message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful! Loading your dashboard...'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+
+          // Get role-specific dashboard
+          Widget dashboard = await NavigationService.getDashboardForUser(
+            result.user!.uid,
+          );
+
+          // Navigate to role-specific dashboard
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            MaterialPageRoute(builder: (context) => dashboard),
           );
         }
       } catch (e) {
+        print('❌ Login failed: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
@@ -256,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               SizedBox(width: 12),
-                              Text('Signing in...'),
+                              Text('Signing in & loading dashboard...'),
                             ],
                           )
                         : const Text(
@@ -323,7 +342,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
+                              builder: (context) =>
+                                  const RoleBasedRegisterScreen(),
                             ),
                           );
                         },
