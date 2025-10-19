@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/colors/colors.dart';
 import '../widgets/art_item_tile.dart';
 import '../../model/market_model.dart';
+import '../forms/art_item_form.dart';
 
 class MarketPlace extends StatelessWidget {
   const MarketPlace({super.key});
@@ -121,6 +122,17 @@ class MarketPlace extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            // Navigate to add new art item form
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ArtItemForm()),
+            );
+          },
+          backgroundColor: AppColors.accent,
+          child: const Icon(Icons.add, color: AppColors.background),
         ),
       ),
     );
