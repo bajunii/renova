@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
+import '../utils/app_colors.dart';
+import 'dashboards/member_dashboard.dart';
 import 'role_based_register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -49,24 +51,41 @@ class _LoginScreenState extends State<LoginScreen> {
           await _authService.updateLastLogin();
 
           // Show role loading message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Login successful! Loading your dashboard...'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Login successful! Loading your dashboard...'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
 
-          // Get role-specific dashboard
-          Widget dashboard = await NavigationService.getDashboardForUser(
-            result.user!.uid,
-          );
+          // Get role-specific dashboard with timeout
+          Widget? dashboard;
+          try {
+            dashboard =
+                await NavigationService.getDashboardForUser(
+                  result.user!.uid,
+                ).timeout(
+                  const Duration(seconds: 10),
+                  onTimeout: () {
+                    print('⏱️ Dashboard loading timed out, using default');
+                    return const MemberDashboard();
+                  },
+                );
+          } catch (e) {
+            print('❌ Error loading dashboard: $e');
+            dashboard = const MemberDashboard();
+          }
 
           // Navigate to role-specific dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => dashboard),
-          );
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => dashboard!),
+            );
+          }
         }
       } catch (e) {
         print('❌ Login failed: $e');
@@ -87,12 +106,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleForgotPassword() async {
     if (_emailController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email address first'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter your email address first'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
@@ -133,23 +154,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   Icon(
                     Icons.account_circle,
                     size: 100,
-                    color: Theme.of(context).primaryColor,
+                    color: AppColors.primary,
                   ),
                   const SizedBox(height: 24),
                   Text(
                     'Welcome to Renova',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
+                      color: AppColors.text,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Sign in to continue',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.secondaryText,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -252,7 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -311,11 +332,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   OutlinedButton.icon(
                     onPressed: () {
                       // Handle Google sign in
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Google sign in functionality'),
-                        ),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Google sign in functionality'),
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.g_mobiledata, size: 24),
                     label: const Text('Continue with Google'),

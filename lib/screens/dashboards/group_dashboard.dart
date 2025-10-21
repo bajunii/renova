@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_colors.dart';
 import '../login_screen.dart';
 
 class GroupDashboard extends StatefulWidget {
@@ -42,8 +43,8 @@ class _GroupDashboardState extends State<GroupDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Group Dashboard'),
-        backgroundColor: Colors.green,
+        title: const Text('EcoSpot Manager Dashboard'),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -110,25 +111,28 @@ class _GroupDashboardState extends State<GroupDashboard> {
         index: _selectedIndex,
         children: [
           _buildHomeTab(user),
-          _buildGroupsTab(),
-          _buildEventsTab(),
+          _buildEcoSpotsTab(),
+          _buildCollectionEventsTab(),
           _buildMembersTab(),
-          _buildAnalyticsTab(),
+          _buildWasteAnalyticsTab(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.secondaryText,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Groups'),
-          BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
+          BottomNavigationBarItem(icon: Icon(Icons.eco), label: 'EcoSpots'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.event),
+            label: 'Collections',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Members'),
           BottomNavigationBarItem(
             icon: Icon(Icons.analytics),
@@ -168,11 +172,11 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Group Administrator',
+                    'EcoSpot Manager',
                     style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                   Text(
-                    user?.displayName ?? 'Group Admin',
+                    user?.displayName ?? 'Community Leader',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -181,7 +185,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Manage your communities effectively',
+                    'Leading sustainable waste management in your community',
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
@@ -195,28 +199,28 @@ class _GroupDashboardState extends State<GroupDashboard> {
             children: [
               Expanded(
                 child: _buildStatCard(
-                  'Active Groups',
-                  '5',
-                  Icons.group,
+                  'Managed EcoSpots',
+                  '8',
+                  Icons.eco,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  'Community Members',
+                  '248',
+                  Icons.people,
                   Colors.blue,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildStatCard(
-                  'Total Members',
-                  '248',
-                  Icons.people,
-                  Colors.orange,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  'Events This Month',
+                  'Collections This Month',
                   '12',
-                  Icons.event,
-                  Colors.purple,
+                  Icons.delete_outline,
+                  Colors.orange,
                 ),
               ),
             ],
@@ -236,11 +240,11 @@ class _GroupDashboardState extends State<GroupDashboard> {
             children: [
               Expanded(
                 child: _buildQuickActionCard(
-                  icon: Icons.group_add,
-                  title: 'Create Group',
+                  icon: Icons.add_location,
+                  title: 'Add EcoSpot',
                   color: Colors.green,
                   onTap: () {
-                    // Handle create group
+                    // Handle create EcoSpot
                   },
                 ),
               ),
@@ -248,10 +252,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
               Expanded(
                 child: _buildQuickActionCard(
                   icon: Icons.event_note,
-                  title: 'Plan Event',
-                  color: Colors.orange,
+                  title: 'Schedule Collection',
+                  color: Colors.blue,
                   onTap: () {
-                    // Handle create event
+                    // Handle create collection event
                   },
                 ),
               ),
@@ -259,10 +263,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
               Expanded(
                 child: _buildQuickActionCard(
                   icon: Icons.people_outline,
-                  title: 'Invite Members',
-                  color: Colors.blue,
+                  title: 'Recruit Volunteers',
+                  color: Colors.orange,
                   onTap: () {
-                    // Handle invite members
+                    // Handle recruit volunteers
                   },
                 ),
               ),
@@ -302,7 +306,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
     );
   }
 
-  Widget _buildGroupsTab() {
+  Widget _buildEcoSpotsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -312,7 +316,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'My Groups',
+                'Managed EcoSpots',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
@@ -320,39 +324,39 @@ class _GroupDashboardState extends State<GroupDashboard> {
               ),
               TextButton.icon(
                 onPressed: () {
-                  // Handle create group
+                  // Handle create new EcoSpot
                 },
                 icon: const Icon(Icons.add),
-                label: const Text('New Group'),
+                label: const Text('New EcoSpot'),
               ),
             ],
           ),
           const SizedBox(height: 16),
 
           _buildGroupManagementCard(
-            'Flutter Developers Community',
-            'Technology',
+            'Downtown Recycling Hub',
+            'Central District',
             156,
+            true,
+            Colors.green,
+          ),
+          _buildGroupManagementCard(
+            'School Collection Point',
+            'Educational Zone',
+            89,
             true,
             Colors.blue,
           ),
           _buildGroupManagementCard(
-            'UI/UX Design Hub',
-            'Design',
-            89,
-            true,
-            Colors.purple,
-          ),
-          _buildGroupManagementCard(
-            'Startup Founders Network',
-            'Business',
+            'Community Center EcoSpot',
+            'Residential Area',
             234,
             false,
-            Colors.red,
+            Colors.orange,
           ),
           _buildGroupManagementCard(
-            'Mobile App Developers',
-            'Technology',
+            'Beach Cleanup Station',
+            'Coastal Area',
             178,
             true,
             Colors.green,
@@ -369,7 +373,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
     );
   }
 
-  Widget _buildEventsTab() {
+  Widget _buildCollectionEventsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -379,7 +383,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Manage Events',
+                'Collection Events',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
@@ -387,7 +391,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
               ),
               TextButton.icon(
                 onPressed: () {
-                  // Handle create event
+                  // Handle create collection event
                 },
                 icon: const Icon(Icons.add),
                 label: const Text('New Event'),
@@ -396,35 +400,35 @@ class _GroupDashboardState extends State<GroupDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // Upcoming Events
-          _buildSectionHeader('Upcoming Events', Icons.schedule),
+          // Upcoming Collection Events
+          _buildSectionHeader('Upcoming Collections', Icons.schedule),
           _buildEventManagementCard(
-            'Flutter Workshop 2024',
-            'Oct 25, 2024 • 10:00 AM',
-            'New York Office',
+            'Downtown Neighborhood Cleanup',
+            'Oct 25, 2024 • 9:00 AM',
+            'Central Park Area',
             45,
             100,
             'upcoming',
             Colors.green,
           ),
           _buildEventManagementCard(
-            'Design System Masterclass',
-            'Nov 2, 2024 • 2:00 PM',
-            'Online',
+            'Beach Waste Collection Drive',
+            'Nov 2, 2024 • 7:00 AM',
+            'Coastal Zone',
             78,
             150,
             'upcoming',
-            Colors.purple,
+            Colors.blue,
           ),
 
           const SizedBox(height: 24),
 
-          // Past Events
-          _buildSectionHeader('Past Events', Icons.history),
+          // Past Collection Events
+          _buildSectionHeader('Completed Collections', Icons.history),
           _buildEventManagementCard(
-            'Mobile Dev Conference',
+            'School Recycling Campaign',
             'Oct 10, 2024',
-            'San Francisco',
+            'Education District',
             120,
             120,
             'completed',
@@ -528,14 +532,14 @@ class _GroupDashboardState extends State<GroupDashboard> {
     );
   }
 
-  Widget _buildAnalyticsTab() {
+  Widget _buildWasteAnalyticsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Analytics & Insights',
+            'Waste Management Analytics',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
@@ -548,19 +552,19 @@ class _GroupDashboardState extends State<GroupDashboard> {
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  'Growth Rate',
-                  '+12%',
-                  Icons.trending_up,
+                  'Recycling Rate',
+                  '78%',
+                  Icons.recycling,
                   Colors.green,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildMetricCard(
-                  'Engagement',
-                  '84%',
-                  Icons.favorite,
-                  Colors.red,
+                  'CO₂ Saved',
+                  '2.4T',
+                  Icons.eco,
+                  Colors.blue,
                 ),
               ),
             ],
@@ -570,10 +574,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  'Active Groups',
-                  '5',
-                  Icons.group,
-                  Colors.blue,
+                  'Active EcoSpots',
+                  '12',
+                  Icons.place,
+                  Colors.orange,
                 ),
               ),
               const SizedBox(width: 12),

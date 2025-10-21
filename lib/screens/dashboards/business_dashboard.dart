@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_colors.dart';
 import '../login_screen.dart';
 
 class BusinessDashboard extends StatefulWidget {
@@ -42,15 +43,15 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Business Dashboard'),
-        backgroundColor: Colors.indigo,
+        title: const Text('Admin Dashboard'),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.add_business),
             onPressed: () {
-              // Handle create business/organization
+              // Handle create waste management partnership
             },
           ),
           IconButton(
@@ -122,8 +123,8 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
         index: _selectedIndex,
         children: [
           _buildDashboardTab(user),
-          _buildOrganizationsTab(),
-          _buildUsersTab(),
+          _buildPartnersTab(),
+          _buildOperationsTab(),
           _buildAnalyticsTab(),
           _buildSettingsTab(user),
         ],
@@ -132,20 +133,20 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Colors.indigo,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.secondaryText,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.business),
-            label: 'Organizations',
+            icon: Icon(Icons.handshake),
+            label: 'Partners',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.supervised_user_circle),
-            label: 'Users',
+            icon: Icon(Icons.local_shipping),
+            label: 'Operations',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.analytics),
@@ -182,11 +183,11 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Business Administrator',
+                    'System Administrator',
                     style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                   Text(
-                    user?.displayName ?? 'Admin',
+                    user?.displayName ?? 'System Admin',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -195,7 +196,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Manage your entire ecosystem',
+                    'Coordinating municipal waste operations',
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
@@ -214,30 +215,30 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
             mainAxisSpacing: 12,
             children: [
               _buildMetricCard(
-                'Total Users',
-                '1,247',
+                'Active Users',
+                '2,847',
                 Icons.people,
                 Colors.blue,
                 '+12%',
               ),
               _buildMetricCard(
-                'Organizations',
-                '23',
-                Icons.business,
+                'Municipal Partners',
+                '8',
+                Icons.handshake,
                 Colors.green,
-                '+5%',
+                '+2%',
               ),
               _buildMetricCard(
-                'Active Groups',
+                'EcoSpots',
                 '156',
-                Icons.group,
+                Icons.eco,
                 Colors.orange,
                 '+8%',
               ),
               _buildMetricCard(
-                'Revenue',
-                '\$24.5K',
-                Icons.attach_money,
+                'Waste Processed',
+                '124.5T',
+                Icons.scale,
                 Colors.purple,
                 '+15%',
               ),
@@ -255,16 +256,16 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
           ),
           const SizedBox(height: 16),
           GridView.count(
-            crossAxisCount: 3,
+            crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 1,
+            childAspectRatio: 1.3,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             children: [
               _buildQuickActionCard(
                 icon: Icons.business_center,
-                title: 'Add Organization',
+                title: 'Add Partner',
                 color: Colors.indigo,
                 onTap: () {},
               ),
@@ -276,25 +277,25 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
               ),
               _buildQuickActionCard(
                 icon: Icons.security,
-                title: 'Security Settings',
+                title: 'Security',
                 color: Colors.red,
                 onTap: () {},
               ),
               _buildQuickActionCard(
                 icon: Icons.report,
-                title: 'Generate Report',
+                title: 'Reports',
                 color: Colors.orange,
                 onTap: () {},
               ),
               _buildQuickActionCard(
-                icon: Icons.payment,
-                title: 'Billing',
-                color: Colors.purple,
+                icon: Icons.local_shipping,
+                title: 'Operations',
+                color: Colors.blue,
                 onTap: () {},
               ),
               _buildQuickActionCard(
                 icon: Icons.backup,
-                title: 'System Backup',
+                title: 'Backup',
                 color: Colors.teal,
                 onTap: () {},
               ),
@@ -340,7 +341,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
     );
   }
 
-  Widget _buildOrganizationsTab() {
+  Widget _buildPartnersTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -350,7 +351,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Organizations',
+                'Partners',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
@@ -358,10 +359,10 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
               ),
               ElevatedButton.icon(
                 onPressed: () {
-                  // Handle add organization
+                  // Handle add municipal partner
                 },
                 icon: const Icon(Icons.add),
-                label: const Text('Add Organization'),
+                label: const Text('Add Partner'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white,
@@ -377,7 +378,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
               Expanded(
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: 'Search organizations...',
+                    hintText: 'Search partners...',
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -399,7 +400,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // Organizations List
+          // Municipal Partners List
           _buildOrganizationCard(
             'TechCorp Solutions',
             'Technology',
@@ -445,7 +446,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
     );
   }
 
-  Widget _buildUsersTab() {
+  Widget _buildOperationsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -455,7 +456,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'User Management',
+                'Operations',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
@@ -463,10 +464,10 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
               ),
               ElevatedButton.icon(
                 onPressed: () {
-                  // Handle add user
+                  // Handle schedule pickup
                 },
-                icon: const Icon(Icons.person_add),
-                label: const Text('Add User'),
+                icon: const Icon(Icons.add_circle),
+                label: const Text('Schedule Pickup'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white,
@@ -476,32 +477,32 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // User Stats
+          // Operations Stats
           Row(
             children: [
               Expanded(
                 child: _buildUserStatCard(
-                  'Total Users',
-                  '1,247',
-                  Icons.people,
+                  'Daily Pickups',
+                  '127',
+                  Icons.local_shipping,
                   Colors.blue,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildUserStatCard(
-                  'Active Today',
-                  '892',
-                  Icons.trending_up,
+                  'Active Routes',
+                  '12',
+                  Icons.route,
                   Colors.green,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildUserStatCard(
-                  'New This Week',
-                  '45',
-                  Icons.person_add,
+                  'Tons Collected',
+                  '4.5',
+                  Icons.scale,
                   Colors.orange,
                 ),
               ),
@@ -1001,6 +1002,8 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
             Text(
               label,
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -1030,9 +1033,11 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
                 title,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
-                  fontSize: 11,
+                  fontSize: 12,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

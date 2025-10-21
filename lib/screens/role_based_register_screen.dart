@@ -53,12 +53,14 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
 
         if (result != null && mounted) {
           // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account created successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Account created successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
 
           // Navigate to appropriate dashboard based on role
           Widget dashboard;
@@ -74,10 +76,12 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
               break;
           }
 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => dashboard),
-          );
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => dashboard),
+            );
+          }
         }
       } catch (e) {
         if (mounted) {
@@ -93,12 +97,14 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
         }
       }
     } else if (_selectedRole == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an account type'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select an account type'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     }
   }
 
