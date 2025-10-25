@@ -30,7 +30,7 @@ class _AdminNavigationState extends State<AdminNavigation> {
     bottomNavigationBar: NavigationBarTheme(
       data: NavigationBarThemeData(
         indicatorColor: AppColors.accent,
-        labelTextStyle: MaterialStateProperty.all(
+        labelTextStyle: WidgetStateProperty.all(
           TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
       ),

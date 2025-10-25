@@ -10,8 +10,9 @@ class MarketPlace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Sample list (could also come from API or local JSON)
-    final List<ArtItem> artItems = [
-      ArtItem(
+    final List<ArtitemModel> artItems = [
+      ArtitemModel(
+        id: "A102",
         title: "Bottle Cap Mosaic",
         imageUrl: "assets/images/free-wifi.png",
         category: "recycled",
@@ -22,7 +23,8 @@ class MarketPlace extends StatelessWidget {
         createdAt: DateTime.now(),
         tags: ["mosaic", "bottle caps"],
       ),
-      ArtItem(
+      ArtitemModel(
+        id: "A003",
         title: "Tire Flower Pot",
         imageUrl: "assets/images/soap.jpg",
         category: "upcycled",
@@ -32,7 +34,8 @@ class MarketPlace extends StatelessWidget {
         createdAt: DateTime.now(),
         tags: ["garden", "tire"],
       ),
-      ArtItem(
+      ArtitemModel(
+        id: "A102",
         title: "Banana Fiber Basket",
         imageUrl: "",
         category: "handmade",
@@ -65,19 +68,21 @@ class MarketPlace extends StatelessWidget {
             ),
           ),
           backgroundColor: AppColors.background,
-          elevation: 2,
+          elevation: 1,
           automaticallyImplyLeading: false,
         ),
         body: Padding(
           padding: const EdgeInsets.all(10.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Horizontal scrollable category list
               SizedBox(
-                height: 50,
-                child: ListView.builder(
+                height: 45,
+                child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: categories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.only(right: 12.0),
@@ -96,7 +101,7 @@ class MarketPlace extends StatelessWidget {
                           ), // Border radius added here
                           side: BorderSide(
                             color: AppColors.accent, // Border color
-                            width: 2, // Border width
+                            width: 1.5, // Border width
                           ),
                         ),
                       ),
@@ -104,10 +109,12 @@ class MarketPlace extends StatelessWidget {
                   },
                 ),
               ),
-              const SizedBox(height: 10), // Space between categories and grid
+              const SizedBox(height: 10),
+
               // GridView for displaying art items
               Expanded(
                 child: GridView.builder(
+                  padding: const EdgeInsets.only(bottom: 20),
                   itemCount: artItems.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
@@ -123,6 +130,8 @@ class MarketPlace extends StatelessWidget {
             ],
           ),
         ),
+
+        // Floating action button to add new art item
         floatingActionButton: FloatingActionButton(
           onPressed: () {
             // Navigate to add new art item form
