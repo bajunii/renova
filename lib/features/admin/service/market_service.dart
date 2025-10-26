@@ -2,13 +2,12 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 // import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../../model/market_model.dart';
 
 class MarketService {
-
   final _firestore = FirebaseFirestore.instance;
   // final _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-
 
   /// Uploads image to Firebase Storage and returns the download URL.
   Future<String?> uploadImage(File? imageFile) async {
@@ -21,43 +20,55 @@ class MarketService {
     return await ref.getDownloadURL();
   }
 
-  /// Creates a new art item record in Firestore
-  Future<void> createArtItem({
-    required String title,
-    required String category,
-    required double price,
-    required String description,
-    required String artist,
-    required List<String> tags,
-    File? imageFile,
-  }) async {
+  ///Creates a new art item document in Firestore using `toJson()` from model
+  Future<void> createArtItem(ArtitemModel artItem, {File? imageFile}) async {
     try {
-      // Upload image (optional)
-      String? imageUrl = await uploadImage(imageFile);
-
-      // Prepare data
-      final data = {
-        'title': title.trim(),
-        'category': category.trim(),
-        'price': price,
-        'description': description.trim(),
-        'artist': artist.trim(),
-        'tags': tags,
-        'created_at': FieldValue.serverTimestamp(),
-      };
-
-      if (imageUrl != null) {
-        data['image_url'] = imageUrl;
+      // Upload image if available
+      String? imageUrl;
+      if (imageFile != null) {
+        imageUrl = await uploadImage(imageFile);
+        artItem.imageUrl = imageUrl;
       }
 
-      // Save to Firestore
-      await _firestore.collection('artitems').add(data);
+      // Create document reference
+      final docRef = _firestore
+          .collection('artitems')
+          .doc(artItem.id.isEmpty ? null : artItem.id);
+
+      // Use model’s `toJson()` for data consistency
+      await docRef.set(artItem.toJson());
     } catch (e) {
-      rethrow;
+      throw Exception('Failed to create art item: $e');
     }
   }
-  /// Fetches all art items from Firestore
 
+  /// GET all Art Items (one-time fetch)
+  Future<List<ArtitemModel>> getArtItems() async {
+    try {
+      final snapshot = await _firestore
+          .collection('artitems')
+          .orderBy('createdAt', descending: true)
+          .get();
 
+      return snapshot.docs
+          .map((doc) => ArtitemModel.fromJson(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      print('Error fetching art items: $e');
+      return [];
+    }
+  }
 
+  /// Real-time stream of all art items using ArtitemModel.fromJson()
+  Stream<List<ArtitemModel>> getArtItemsStream() {
+    return _firestore
+        .collection('artitems')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => ArtitemModel.fromJson(doc.data(), doc.id))
+              .toList();
+        });
+  }
 }

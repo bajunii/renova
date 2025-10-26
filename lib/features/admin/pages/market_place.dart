@@ -3,6 +3,7 @@ import '../../../core/colors/colors.dart';
 import '../widgets/art_item_tile.dart';
 import '../../model/market_model.dart';
 import '../forms/art_item_form.dart';
+import '../service/market_service.dart';
 
 class MarketPlace extends StatelessWidget {
   const MarketPlace({super.key});
@@ -10,42 +11,7 @@ class MarketPlace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Sample list (could also come from API or local JSON)
-    final List<ArtitemModel> artItems = [
-      ArtitemModel(
-        id: "A102",
-        title: "Bottle Cap Mosaic",
-        imageUrl: "assets/images/free-wifi.png",
-        category: "recycled",
-        price: 45.50,
-        description:
-            "A vibrant wall mosaic crafted from discarded bottle caps.",
-        artist: "Jane Mwangi",
-        createdAt: DateTime.now(),
-        tags: ["mosaic", "bottle caps"],
-      ),
-      ArtitemModel(
-        id: "A003",
-        title: "Tire Flower Pot",
-        imageUrl: "assets/images/soap.jpg",
-        category: "upcycled",
-        price: 25.00,
-        description: "Old tire transformed into a stylish flower pot.",
-        artist: "Peter Otieno",
-        createdAt: DateTime.now(),
-        tags: ["garden", "tire"],
-      ),
-      ArtitemModel(
-        id: "A102",
-        title: "Banana Fiber Basket",
-        imageUrl: "",
-        category: "handmade",
-        price: 35.00,
-        description: "Handwoven basket made from dried banana fibers.",
-        artist: "Mary Njeri",
-        createdAt: DateTime.now(),
-        tags: ["basket", "woven"],
-      ),
-    ];
+    final marketService = MarketService();
 
     // Categories for the horizontal list
     final List<String> categories = [
@@ -55,6 +21,7 @@ class MarketPlace extends StatelessWidget {
       "Handmade",
       "Nature",
       "Modern Art",
+      "Others"
     ];
 
     return SafeArea(
@@ -98,10 +65,10 @@ class MarketPlace extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
                             10,
-                          ), // Border radius added here
+                          ), 
                           side: BorderSide(
-                            color: AppColors.accent, // Border color
-                            width: 1.5, // Border width
+                            color: AppColors.accent, 
+                            width: 1.5, 
                           ),
                         ),
                       ),
@@ -112,21 +79,7 @@ class MarketPlace extends StatelessWidget {
               const SizedBox(height: 10),
 
               // GridView for displaying art items
-              Expanded(
-                child: GridView.builder(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  itemCount: artItems.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.8,
-                  ),
-                  itemBuilder: (context, index) {
-                    return ArtItemTile(artItem: artItems[index]);
-                  },
-                ),
-              ),
+              Expanded(child: _getArtitems(marketService)),
             ],
           ),
         ),
@@ -134,7 +87,6 @@ class MarketPlace extends StatelessWidget {
         // Floating action button to add new art item
         floatingActionButton: FloatingActionButton(
           onPressed: () {
-            // Navigate to add new art item form
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ArtItemForm()),
@@ -144,6 +96,51 @@ class MarketPlace extends StatelessWidget {
           child: const Icon(Icons.add, color: AppColors.background),
         ),
       ),
+    );
+  }
+
+  FutureBuilder<List<ArtitemModel>> _getArtitems(MarketService marketService) {
+    return FutureBuilder<List<ArtitemModel>>(
+      future: marketService.getArtItems(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: const TextStyle(color: Colors.red),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Text(
+              'No art items available.',
+              style: TextStyle(fontSize: 16),
+            ),
+          );
+        }
+
+        final artItems = snapshot.data!;
+
+        return GridView.builder(
+          padding: const EdgeInsets.only(bottom: 20),
+          itemCount: artItems.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.8,
+          ),
+          itemBuilder: (context, index) {
+            return ArtItemTile(artItem: artItems[index]);
+          },
+        );
+      },
     );
   }
 }

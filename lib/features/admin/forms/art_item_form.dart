@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/colors/colors.dart';
 import '../pages/market_place.dart';
 import '../service/market_service.dart';
+import '../../model/market_model.dart';
 
 class ArtItemForm extends StatefulWidget {
   const ArtItemForm({super.key});
@@ -59,15 +60,21 @@ class _ArtItemFormState extends State<ArtItemForm> {
 
       final marketService = MarketService();
 
-      await marketService.createArtItem(
-        title: _titleController.text,
-        category: _categoryController.text,
+      // Create model instance
+      final artItem = ArtitemModel(
+        id: '',
+        title: _titleController.text.trim(),
+        imageUrl: null,
+        category: _categoryController.text.trim(),
         price: double.tryParse(_priceController.text.trim()) ?? 0.0,
-        description: _descriptionController.text,
-        artist: _artistController.text,
+        description: _descriptionController.text.trim(),
+        artist: _artistController.text.trim(),
+        createdAt: DateTime.now(),
         tags: _tags,
-        imageFile: _imageFile,
       );
+
+      // Use MarketService
+      await marketService.createArtItem(artItem, imageFile: _imageFile);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Art item uploaded successfully!')),
