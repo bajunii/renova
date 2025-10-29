@@ -1,0 +1,50 @@
+// Firestore Security Rules for Renova App
+// Copy this content to your Firestore Rules tab in Firebase Console
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Group Organizations collection - organizations can read/write their own data
+    match /group_organizations/{orgId} {
+      allow read, write: if request.auth != null && request.auth.uid == orgId;
+    }
+    
+    // Groups collection - members can read their group, leaders/chairs can write
+    match /groups/{groupId} {
+      // Allow read access to group members and organizations
+      allow read: if request.auth != null && (
+        // Check if this is an organization account accessing its linked group
+        exists(/databases/$(database)/documents/group_organizations/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/group_organizations/$(request.auth.uid)).data.groupId == groupId
+      );
+      
+      // Allow write access to organizations (they manage their groups)
+      allow write: if request.auth != null && (
+        // Organization account can write to their linked group
+        exists(/databases/$(database)/documents/group_organizations/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/group_organizations/$(request.auth.uid)).data.groupId == groupId
+      );
+      
+      // Allow create for authenticated users (new groups)
+      allow create: if request.auth != null;
+    }
+    
+    // Admin access - simplified for better compatibility
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Public read access for some collections (adjust as needed)
+    match /public/{document=**} {
+      allow read: if true;
+    }
+  }
+}

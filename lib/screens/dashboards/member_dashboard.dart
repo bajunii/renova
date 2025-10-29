@@ -105,8 +105,8 @@ class _MemberDashboardState extends State<MemberDashboard> {
         index: _selectedIndex,
         children: [
           _buildHomeTab(user),
-          _buildRecyclingTab(),
           _buildEcoSpotsTab(),
+          _buildEventsTab(),
           _buildProfileTab(user),
         ],
       ),
@@ -118,11 +118,11 @@ class _MemberDashboardState extends State<MemberDashboard> {
         unselectedItemColor: AppColors.secondaryText,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.eco), label: 'Recycling'),
           BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
             label: 'EcoSpots',
           ),
+          BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
@@ -249,14 +249,14 @@ class _MemberDashboardState extends State<MemberDashboard> {
     );
   }
 
-  Widget _buildRecyclingTab() {
+  Widget _buildEventsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'My Recycling Activity',
+            'Upcoming Events',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
@@ -264,76 +264,47 @@ class _MemberDashboardState extends State<MemberDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // Recycling Stats
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          'Items Recycled',
-                          '156',
-                          Icons.recycling,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          'Points Earned',
-                          '1,240',
-                          Icons.stars,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard('CO₂ Saved', '12kg', Icons.eco),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Recent Recycling
-          _buildSectionHeader('Recent Recycling', Icons.history),
-          _buildGroupCard(
-            'Plastic bottles - 5 items',
-            'Downtown EcoSpot',
-            25,
+          // Upcoming Events in Next Two Weeks
+          _buildSectionHeader('Next 2 Weeks', Icons.schedule),
+          _buildEventCard(
+            'Beach Cleanup Drive',
+            'Oct 28, 2024 • 7:00 AM',
+            'Coastal Area',
             Colors.blue,
           ),
-          _buildGroupCard(
-            'Paper & cardboard - 8 items',
-            'School EcoSpot',
-            40,
+          _buildEventCard(
+            'Community Recycling Day',
+            'Nov 2, 2024 • 9:00 AM',
+            'Central Park',
             Colors.green,
           ),
-          _buildGroupCard(
-            'Glass containers - 3 items',
-            'Community Center',
-            15,
+          _buildEventCard(
+            'EcoSpot Opening',
+            'Nov 5, 2024 • 10:00 AM',
+            'Downtown Hub',
             Colors.orange,
           ),
 
           const SizedBox(height: 24),
 
-          // Available Rewards
-          _buildSectionHeader('Available Rewards', Icons.card_giftcard),
+          // All Upcoming Events
+          _buildSectionHeader('All Upcoming Events', Icons.event),
           _buildEventCard(
-            'Free bus ride',
-            '100 points required',
-            'Transport',
-            Colors.blue,
+            'Monthly Waste Sorting',
+            'Nov 15, 2024 • 2:00 PM',
+            'Community Center',
+            Colors.purple,
           ),
           _buildEventCard(
-            'Grocery discount',
-            '250 points required',
-            'Shopping',
+            'Environmental Workshop',
+            'Nov 20, 2024 • 4:00 PM',
+            'School Auditorium',
+            Colors.teal,
+          ),
+          _buildEventCard(
+            'Tree Planting Campaign',
+            'Dec 1, 2024 • 8:00 AM',
+            'City Park',
             Colors.green,
           ),
         ],
