@@ -21,6 +21,18 @@ class GroupsPage extends StatelessWidget {
           automaticallyImplyLeading: false,
         ),
         body: Center(child: Text('GroupsPage Comming Soon...')),
+
+        // Floating action button to add group
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            // Navigator.push(
+            //   context,
+            //   MaterialPageRoute(builder: (context) => const Text('Add Group Form Coming Soon...')),
+            // );
+          },
+          backgroundColor: AppColors.accent,
+          child: const Icon(Icons.add, color: AppColors.background),
+        ),
       ),
     );
   }
