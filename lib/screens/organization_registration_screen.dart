@@ -11,7 +11,7 @@ import 'dashboards/group_dashboard.dart';
 class OrganizationRegistrationScreen extends StatefulWidget {
   final VoidCallback? onRegistrationComplete;
   final bool isEmbedded;
-  
+
   const OrganizationRegistrationScreen({
     super.key,
     this.onRegistrationComplete,
@@ -67,7 +67,8 @@ class _OrganizationRegistrationScreenState
   }
 
   // Getter to check if form is valid
-  bool get isFormValid => _formKey.currentState?.validate() == true && _validateMembers();
+  bool get isFormValid =>
+      _formKey.currentState?.validate() == true && _validateMembers();
 
   @override
   void initState() {
@@ -111,7 +112,7 @@ class _OrganizationRegistrationScreenState
           _documents = result.paths.map((path) => File(path!)).toList();
           _documentNames = result.files.map((file) => file.name).toList();
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${_documents.length} document(s) selected'),
@@ -142,11 +143,11 @@ class _OrganizationRegistrationScreenState
       for (int i = 0; i < _documents.length; i++) {
         final file = _documents[i];
         final fileName = _documentNames[i];
-        
+
         // Create a unique file name
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final uniqueFileName = '${timestamp}_$fileName';
-        
+
         // Create storage reference
         final storageRef = FirebaseStorage.instance
             .ref()
@@ -157,9 +158,9 @@ class _OrganizationRegistrationScreenState
         // Upload file
         final uploadTask = await storageRef.putFile(file);
         final downloadUrl = await uploadTask.ref.getDownloadURL();
-        
+
         documentUrls.add(downloadUrl);
-        
+
         print('✅ Document uploaded: $fileName -> $downloadUrl');
       }
 
@@ -169,7 +170,9 @@ class _OrganizationRegistrationScreenState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${documentUrls.length} document(s) uploaded successfully'),
+          content: Text(
+            '${documentUrls.length} document(s) uploaded successfully',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -179,7 +182,7 @@ class _OrganizationRegistrationScreenState
       setState(() {
         _isUploadingDocuments = false;
       });
-      
+
       print('❌ Error uploading documents: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -187,7 +190,7 @@ class _OrganizationRegistrationScreenState
           backgroundColor: Colors.red,
         ),
       );
-      
+
       throw Exception('Failed to upload documents: $e');
     }
   }
@@ -272,7 +275,10 @@ class _OrganizationRegistrationScreenState
           }
 
           // Create the group with all members and documents
-          final groupId = await _createGroupWithMembers(result.user!.uid, documentUrls);
+          final groupId = await _createGroupWithMembers(
+            result.user!.uid,
+            documentUrls,
+          );
 
           // Link group to organization
           await _groupAuthService.linkGroupToOrganization(groupId);
@@ -322,7 +328,10 @@ class _OrganizationRegistrationScreenState
     return false;
   }
 
-  Future<String> _createGroupWithMembers(String organizationUserId, List<String> documentUrls) async {
+  Future<String> _createGroupWithMembers(
+    String organizationUserId,
+    List<String> documentUrls,
+  ) async {
     try {
       // Update member user IDs with email as placeholder
       final updatedMembers = _members
@@ -835,34 +844,31 @@ class _OrganizationRegistrationScreenState
           style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
         const SizedBox(height: 12),
-        
+
         OutlinedButton.icon(
           onPressed: _isUploadingDocuments ? null : _pickDocuments,
-          icon: _isUploadingDocuments 
+          icon: _isUploadingDocuments
               ? const SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.upload_file),
-          label: Text(_isUploadingDocuments 
-              ? 'Uploading...'
-              : 'Select Documents'),
+          label: Text(
+            _isUploadingDocuments ? 'Uploading...' : 'Select Documents',
+          ),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
           ),
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         Text(
           'Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
-        
+
         if (_documents.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
@@ -892,10 +898,11 @@ class _OrganizationRegistrationScreenState
                 ..._documents.asMap().entries.map((entry) {
                   final index = entry.key;
                   final doc = entry.value;
-                  final fileName = _documentNames.isNotEmpty && index < _documentNames.length
+                  final fileName =
+                      _documentNames.isNotEmpty && index < _documentNames.length
                       ? _documentNames[index]
                       : doc.path.split('/').last;
-                      
+
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
@@ -914,7 +921,11 @@ class _OrganizationRegistrationScreenState
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.red,
+                            size: 20,
+                          ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: () {

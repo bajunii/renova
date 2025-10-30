@@ -923,22 +923,6 @@ class _GroupDashboardState extends State<GroupDashboard> {
                     label: const Text('Edit Details'),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _showUploadDocumentsDialog(group);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                    ),
-                    icon: const Icon(Icons.upload_file, color: Colors.white),
-                    label: const Text(
-                      'Upload Docs',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
               ],
             ),
 
@@ -1050,7 +1034,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user?.displayName ?? 'Group Leader',
+                        user?.displayName ?? 'Group',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1074,7 +1058,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'Group Leader',
+                          'Group',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontSize: 12,
@@ -1141,15 +1125,6 @@ class _GroupDashboardState extends State<GroupDashboard> {
     // TODO: Implement edit group functionality
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Edit group functionality coming soon!')),
-    );
-  }
-
-  void _showUploadDocumentsDialog(Group group) {
-    // TODO: Implement document upload functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Document upload functionality coming soon!'),
-      ),
     );
   }
 
@@ -2296,7 +2271,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
   String _getRoleDisplayName(MemberRole role) {
     switch (role) {
       case MemberRole.leader:
-        return 'Group Leader';
+        return 'Group';
       case MemberRole.chair:
         return 'Chairperson';
       case MemberRole.secretary:

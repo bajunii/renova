@@ -28,7 +28,8 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
   bool _isLoading = false;
   UserRole? _selectedRole;
   bool _showOrganizationForm = false;
-  final GlobalKey<State<OrganizationRegistrationScreen>> _organizationFormKey = GlobalKey<State<OrganizationRegistrationScreen>>();
+  final GlobalKey<State<OrganizationRegistrationScreen>> _organizationFormKey =
+      GlobalKey<State<OrganizationRegistrationScreen>>();
 
   @override
   void dispose() {
@@ -124,7 +125,9 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text(_showOrganizationForm ? 'Register Organization' : 'Create Account'),
+        title: Text(
+          _showOrganizationForm ? 'Register Organization' : 'Create Account',
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
@@ -142,7 +145,7 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
         ),
       ),
       body: SafeArea(
-        child: _showOrganizationForm 
+        child: _showOrganizationForm
             ? _buildOrganizationRegistrationBody()
             : _buildRoleSelectionBody(),
       ),
@@ -484,7 +487,9 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
                         ],
                       )
                     : Text(
-                        _selectedRole == UserRole.group ? 'Continue' : 'Create Account',
+                        _selectedRole == UserRole.group
+                            ? 'Continue'
+                            : 'Create Account',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -527,9 +532,7 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
             onRegistrationComplete: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const GroupDashboard(),
-                ),
+                MaterialPageRoute(builder: (context) => const GroupDashboard()),
               );
             },
           ),
@@ -602,7 +605,8 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
 
     try {
       // Get reference to the organization form using the GlobalKey
-      final organizationFormState = _organizationFormKey.currentState as dynamic;
+      final organizationFormState =
+          _organizationFormKey.currentState as dynamic;
       if (organizationFormState != null) {
         final success = await organizationFormState.registerOrganization();
         if (success) {
@@ -610,7 +614,7 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
           return;
         }
       }
-      
+
       // If we reach here, something went wrong
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
