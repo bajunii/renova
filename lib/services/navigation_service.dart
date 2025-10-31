@@ -11,7 +11,26 @@ class NavigationService {
     try {
       print('🔍 Getting dashboard for user: $userId');
 
-      // Get user data from Firestore
+      // First check if this is an organization account
+      DocumentSnapshot orgDoc = await FirebaseFirestore.instance
+          .collection('group_organizations')
+          .doc(userId)
+          .get();
+
+      if (orgDoc.exists) {
+        // This is a group organization account
+        Map<String, dynamic> orgData = orgDoc.data() as Map<String, dynamic>;
+        String? roleString = orgData['role'] as String?;
+        
+        print('🏢 Organization account found with role: $roleString');
+        
+        if (roleString == 'group' || roleString == UserRole.group.name) {
+          print('🚀 Loading Group Dashboard for organization');
+          return const GroupDashboard();
+        }
+      }
+
+      // If not an organization, check regular user collection
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -21,7 +40,7 @@ class NavigationService {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         String? roleString = userData['role'] as String?;
 
-        print('👤 User role found: $roleString');
+        print('👤 Individual user role found: $roleString');
 
         if (roleString != null) {
           UserRole role = UserRole.fromString(roleString);
@@ -57,6 +76,29 @@ class NavigationService {
 
   static Future<Map<String, dynamic>> getUserRoleInfo(String userId) async {
     try {
+      // First check if this is an organization account
+      DocumentSnapshot orgDoc = await FirebaseFirestore.instance
+          .collection('group_organizations')
+          .doc(userId)
+          .get();
+
+      if (orgDoc.exists) {
+        Map<String, dynamic> orgData = orgDoc.data() as Map<String, dynamic>;
+        String? roleString = orgData['role'] as String?;
+        UserRole role = getRoleFromString(roleString);
+
+        return {
+          'role': role,
+          'roleString': roleString ?? 'group',
+          'displayName': role.displayName,
+          'description': role.description,
+          'userData': orgData,
+          'isOrganization': true,
+          'organizationName': orgData['organizationName'] ?? 'Unknown Organization',
+        };
+      }
+
+      // Check regular user collection
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -73,6 +115,7 @@ class NavigationService {
           'displayName': role.displayName,
           'description': role.description,
           'userData': userData,
+          'isOrganization': false,
         };
       }
     } catch (e) {
@@ -85,6 +128,7 @@ class NavigationService {
       'displayName': 'Member',
       'description': 'Individual user with access to basic features',
       'userData': {},
+      'isOrganization': false,
     };
   }
 }

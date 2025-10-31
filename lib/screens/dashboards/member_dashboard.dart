@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_colors.dart';
 import '../login_screen.dart';
 
 class MemberDashboard extends StatefulWidget {
@@ -43,7 +44,7 @@ class _MemberDashboardState extends State<MemberDashboard> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Member Dashboard'),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -104,8 +105,8 @@ class _MemberDashboardState extends State<MemberDashboard> {
         index: _selectedIndex,
         children: [
           _buildHomeTab(user),
-          _buildActivitiesTab(),
-          _buildCommunityTab(),
+          _buildEcoSpotsTab(),
+          _buildEventsTab(),
           _buildProfileTab(user),
         ],
       ),
@@ -113,15 +114,15 @@ class _MemberDashboardState extends State<MemberDashboard> {
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Theme.of(context).primaryColor,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.secondaryText,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_activity),
-            label: 'Activities',
+            icon: Icon(Icons.location_on),
+            label: 'EcoSpots',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
+          BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
@@ -166,7 +167,7 @@ class _MemberDashboardState extends State<MemberDashboard> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Ready to explore today?',
+                    'Ready to make a difference today?',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 14,
@@ -191,24 +192,24 @@ class _MemberDashboardState extends State<MemberDashboard> {
             children: [
               Expanded(
                 child: _buildQuickActionCard(
-                  icon: Icons.search,
-                  title: 'Find Groups',
-                  subtitle: 'Discover new communities',
-                  color: Colors.blue,
+                  icon: Icons.recycling,
+                  title: 'Report Waste',
+                  subtitle: 'Log uncollected waste',
+                  color: Colors.red,
                   onTap: () {
-                    // Handle find groups
+                    // Handle waste reporting
                   },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildQuickActionCard(
-                  icon: Icons.event,
-                  title: 'Join Events',
-                  subtitle: 'Browse upcoming events',
+                  icon: Icons.location_on,
+                  title: 'Find EcoSpots',
+                  subtitle: 'Locate drop-off points',
                   color: Colors.green,
                   onTap: () {
-                    // Handle join events
+                    // Handle find EcoSpots
                   },
                 ),
               ),
@@ -226,36 +227,36 @@ class _MemberDashboardState extends State<MemberDashboard> {
           ),
           const SizedBox(height: 16),
           _buildActivityCard(
-            icon: Icons.group_add,
-            title: 'Joined Flutter Developers',
+            icon: Icons.delete_outline,
+            title: 'Reported uncollected waste on Main Street',
             subtitle: '2 hours ago',
             color: Colors.orange,
           ),
           _buildActivityCard(
-            icon: Icons.event_available,
-            title: 'Registered for Tech Meetup',
+            icon: Icons.eco,
+            title: 'Dropped recyclables at Downtown EcoSpot',
             subtitle: '1 day ago',
-            color: Colors.purple,
+            color: Colors.green,
           ),
           _buildActivityCard(
-            icon: Icons.message,
-            title: 'New message in Design Group',
+            icon: Icons.group,
+            title: 'Joined Estate Clean-up Group',
             subtitle: '3 days ago',
-            color: Colors.teal,
+            color: Colors.blue,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActivitiesTab() {
+  Widget _buildEventsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'My Activities',
+            'Upcoming Events',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
@@ -263,41 +264,62 @@ class _MemberDashboardState extends State<MemberDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // Joined Groups
-          _buildSectionHeader('Joined Groups', Icons.group),
-          _buildGroupCard('Flutter Developers', 'Technology', 150, Colors.blue),
-          _buildGroupCard('UI/UX Designers', 'Design', 89, Colors.purple),
-          _buildGroupCard('Startup Network', 'Business', 245, Colors.green),
+          // Upcoming Events in Next Two Weeks
+          _buildSectionHeader('Next 2 Weeks', Icons.schedule),
+          _buildEventCard(
+            'Beach Cleanup Drive',
+            'Oct 28, 2024 • 7:00 AM',
+            'Coastal Area',
+            Colors.blue,
+          ),
+          _buildEventCard(
+            'Community Recycling Day',
+            'Nov 2, 2024 • 9:00 AM',
+            'Central Park',
+            Colors.green,
+          ),
+          _buildEventCard(
+            'EcoSpot Opening',
+            'Nov 5, 2024 • 10:00 AM',
+            'Downtown Hub',
+            Colors.orange,
+          ),
 
           const SizedBox(height: 24),
 
-          // Upcoming Events
-          _buildSectionHeader('Upcoming Events', Icons.event),
+          // All Upcoming Events
+          _buildSectionHeader('All Upcoming Events', Icons.event),
           _buildEventCard(
-            'Tech Meetup 2024',
-            'Oct 20, 2024',
-            'Online',
-            Colors.orange,
+            'Monthly Waste Sorting',
+            'Nov 15, 2024 • 2:00 PM',
+            'Community Center',
+            Colors.purple,
           ),
           _buildEventCard(
-            'Design Workshop',
-            'Oct 25, 2024',
-            'New York',
+            'Environmental Workshop',
+            'Nov 20, 2024 • 4:00 PM',
+            'School Auditorium',
             Colors.teal,
+          ),
+          _buildEventCard(
+            'Tree Planting Campaign',
+            'Dec 1, 2024 • 8:00 AM',
+            'City Park',
+            Colors.green,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCommunityTab() {
+  Widget _buildEcoSpotsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Discover Community',
+            'EcoSpots Near You',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
@@ -308,7 +330,7 @@ class _MemberDashboardState extends State<MemberDashboard> {
           // Search Bar
           TextField(
             decoration: InputDecoration(
-              hintText: 'Search groups, events, or people...',
+              hintText: 'Search EcoSpots by location...',
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -319,11 +341,26 @@ class _MemberDashboardState extends State<MemberDashboard> {
           ),
           const SizedBox(height: 24),
 
-          // Recommended Groups
-          _buildSectionHeader('Recommended Groups', Icons.recommend),
-          _buildGroupCard('React Native Devs', 'Technology', 320, Colors.cyan),
-          _buildGroupCard('Photography Club', 'Creative', 156, Colors.indigo),
-          _buildGroupCard('Entrepreneurs Hub', 'Business', 892, Colors.red),
+          // Nearby EcoSpots
+          _buildSectionHeader('Nearby EcoSpots', Icons.place),
+          _buildGroupCard(
+            'Downtown Recycling Hub',
+            '0.5 km away • Open until 6 PM',
+            45,
+            Colors.green,
+          ),
+          _buildGroupCard(
+            'School Collection Point',
+            '1.2 km away • Open 24/7',
+            78,
+            Colors.blue,
+          ),
+          _buildGroupCard(
+            'Community Center EcoSpot',
+            '2.0 km away • Open until 8 PM',
+            32,
+            Colors.orange,
+          ),
         ],
       ),
     );

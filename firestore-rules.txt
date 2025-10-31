@@ -1,0 +1,164 @@
+// Firestore Security Rules for Renova App - Updated for Role-Based System
+// Copy this content to your Firestore Rules tab in Firebase Console
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is organization
+    function isOrganization() {
+      return exists(/databases/$(database)/documents/group_organizations/$(request.auth.uid));
+    }
+    
+    // Helper function to check if user is individual with specific role
+    function hasUserRole(role) {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    
+    // Helper function to get organization's group ID
+    function getOrgGroupId() {
+      return get(/databases/$(database)/documents/group_organizations/$(request.auth.uid)).data.groupId;
+    }
+    
+    // Users collection - individual users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Admin users can read all user data
+      allow read: if request.auth != null && hasUserRole('business');
+    }
+    
+    // Group Organizations collection - organizations can read/write their own data
+    match /group_organizations/{orgId} {
+      allow read, write: if request.auth != null && request.auth.uid == orgId;
+      
+      // Business users (admins) can read organization data
+      allow read: if request.auth != null && hasUserRole('business');
+    }
+    
+    // Groups collection - role-based access control
+    match /groups/{groupId} {
+      // Read access: Organizations can read their linked group, members can read groups they belong to
+      allow read: if request.auth != null && (
+        // Organization accessing its linked group
+        (isOrganization() && getOrgGroupId() == groupId) ||
+        // Individual members/business users can read groups (for browsing/joining)
+        hasUserRole('member') ||
+        hasUserRole('business')
+      );
+      
+      // Write access: Only organizations can modify their groups, plus business admins
+      allow write: if request.auth != null && (
+        // Organization can write to their linked group
+        (isOrganization() && getOrgGroupId() == groupId) ||
+        // Business users (admins) have full access
+        hasUserRole('business')
+      );
+      
+      // Create access: Organizations and business users can create groups
+      allow create: if request.auth != null && (
+        isOrganization() || 
+        hasUserRole('business')
+      );
+    }
+    
+    // EcoSpots collection - based on group membership and roles
+    match /ecospots/{spotId} {
+      allow read: if request.auth != null;
+      
+      allow write, create: if request.auth != null && (
+        // Organizations can manage ecospots for their groups
+        isOrganization() ||
+        // Business users have full access
+        hasUserRole('business')
+      );
+    }
+    
+    // Collection Events - group-based access
+    match /collection_events/{eventId} {
+      allow read: if request.auth != null;
+      
+      allow write, create: if request.auth != null && (
+        // Organizations can manage events
+        isOrganization() ||
+        // Business users have full access
+        hasUserRole('business')
+      );
+    }
+    
+    // Market/Products - role-based access
+    match /products/{productId} {
+      allow read: if request.auth != null;
+      
+      allow write, create: if request.auth != null && (
+        // Organizations can manage their products
+        isOrganization() ||
+        // Business users have full access
+        hasUserRole('business')
+      );
+    }
+    
+    // Orders - user and organization specific
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null && (
+        // Users can access their own orders
+        resource.data.userId == request.auth.uid ||
+        // Organizations can access orders related to their products
+        isOrganization() ||
+        // Business users have full access
+        hasUserRole('business')
+      );
+      
+      allow create: if request.auth != null;
+    }
+    
+    // Analytics data - restricted access
+    match /analytics/{document=**} {
+      allow read, write: if request.auth != null && (
+        // Organizations can access their analytics
+        isOrganization() ||
+        // Business users have full access
+        hasUserRole('business')
+      );
+    }
+    
+    // Admin collections - business role only
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null && hasUserRole('business');
+    }
+    
+    // System settings - admin only
+    match /settings/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && hasUserRole('business');
+    }
+    
+    // Notifications - user specific
+    match /notifications/{notificationId} {
+      allow read, write: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        hasUserRole('business')
+      );
+      
+      allow create: if request.auth != null;
+    }
+    
+    // File uploads (organization documents, profile images, etc.)
+    match /uploads/{document=**} {
+      allow read: if request.auth != null;
+      allow write, create: if request.auth != null;
+    }
+    
+    // TEMPORARY for testing - remove in production
+    match /artitems/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Public data - everyone can read
+    match /public/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null && hasUserRole('business');
+    }
+  }
+}

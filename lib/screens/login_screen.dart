@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/group_auth_service.dart';
 import '../services/navigation_service.dart';
+import '../utils/app_colors.dart';
+import '../models/group.dart';
+import 'dashboards/member_dashboard.dart';
+import 'dashboards/group_dashboard.dart';
+import 'member_selection_screen.dart';
 import 'role_based_register_screen.dart';
+import 'organization_registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
+  final GroupAuthService _groupAuthService = GroupAuthService();
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
@@ -36,37 +44,126 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         print('🔐 Starting login process...');
 
-        // Sign in with Firebase Authentication
-        UserCredential? result = await _authService.signInWithEmailPassword(
-          _emailController.text,
-          _passwordController.text,
-        );
+        // Try group organization login first
+        UserCredential? result;
+        Group? group;
+        bool isGroupLogin = false;
+
+        try {
+          result = await _groupAuthService.signInWithOrganizationEmail(
+            _emailController.text,
+            _passwordController.text,
+          );
+
+          if (result != null) {
+            // Try to get the group, but don't fail if it doesn't exist
+            try {
+              group = await _groupAuthService.getCurrentUserGroup();
+              if (group != null) {
+                isGroupLogin = true;
+                print('✅ Group organization login successful');
+              } else {
+                print(
+                  '⚠️ Organization logged in but no group found - proceeding to dashboard setup',
+                );
+                isGroupLogin = true; // Still treat as organization login
+              }
+            } catch (groupError) {
+              print(
+                '⚠️ Error getting group after organization login: $groupError',
+              );
+              // Still proceed as organization login, but without group data
+              isGroupLogin = true;
+            }
+          }
+        } catch (e) {
+          print('🔍 Not a group organization, trying individual login...');
+          // If group login fails, try individual user login
+          result = await _authService.signInWithEmailPassword(
+            _emailController.text,
+            _passwordController.text,
+          );
+        }
 
         if (result != null && mounted) {
-          print('✅ Login successful, getting user role...');
+          if (isGroupLogin) {
+            // Handle group organization login
+            print('✅ Navigating to organization dashboard...');
 
-          // Update last login time
-          await _authService.updateLastLogin();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Organization login successful!'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
 
-          // Show role loading message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Login successful! Loading your dashboard...'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
+            // Navigate based on whether group exists
+            if (mounted) {
+              if (group != null) {
+                // Group exists, go to member selection
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MemberSelectionScreen(group: group!),
+                  ),
+                );
+              } else {
+                // No group found, go to group dashboard to create group
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GroupDashboard(),
+                  ),
+                );
+              }
+            }
+          } else {
+            // Handle individual user login
+            print('✅ Individual login successful, getting user role...');
 
-          // Get role-specific dashboard
-          Widget dashboard = await NavigationService.getDashboardForUser(
-            result.user!.uid,
-          );
+            // Update last login time
+            await _authService.updateLastLogin();
 
-          // Navigate to role-specific dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => dashboard),
-          );
+            // Show role loading message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Login successful! Loading your dashboard...'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+
+            // Get role-specific dashboard with timeout
+            Widget? dashboard;
+            try {
+              dashboard =
+                  await NavigationService.getDashboardForUser(
+                    result.user!.uid,
+                  ).timeout(
+                    const Duration(seconds: 10),
+                    onTimeout: () {
+                      print('⏱️ Dashboard loading timed out, using default');
+                      return const MemberDashboard();
+                    },
+                  );
+            } catch (e) {
+              print('❌ Error loading dashboard: $e');
+              dashboard = const MemberDashboard();
+            }
+
+            // Navigate to role-specific dashboard
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => dashboard!),
+              );
+            }
+          }
         }
       } catch (e) {
         print('❌ Login failed: $e');
@@ -87,12 +184,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleForgotPassword() async {
     if (_emailController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email address first'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter your email address first'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
@@ -133,23 +232,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   Icon(
                     Icons.account_circle,
                     size: 100,
-                    color: Theme.of(context).primaryColor,
+                    color: AppColors.primary,
                   ),
                   const SizedBox(height: 24),
                   Text(
                     'Welcome to Renova',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
+                      color: AppColors.text,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Sign in to continue',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.secondaryText,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -252,7 +351,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -311,11 +410,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   OutlinedButton.icon(
                     onPressed: () {
                       // Handle Google sign in
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Google sign in functionality'),
-                        ),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Google sign in functionality'),
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.g_mobiledata, size: 24),
                     label: const Text('Continue with Google'),
@@ -354,6 +455,37 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
+
+                //   const SizedBox(height: 8),
+
+                // //  Organization Registration
+                //   Row(
+                //     mainAxisAlignment: MainAxisAlignment.center,
+                //     children: [
+                //       Text(
+                //         "Want to register an organization? ",
+                //         style: TextStyle(color: Colors.grey[600]),
+                //       ),
+                //       TextButton(
+                //         onPressed: () {
+                //           Navigator.push(
+                //             context,
+                //             MaterialPageRoute(
+                //               builder: (context) =>
+                //                   const OrganizationRegistrationScreen(),
+                //             ),
+                //           );
+                //         },
+                //         child: const Text(
+                //           'Register Organization',
+                //           style: TextStyle(
+                //             fontWeight: FontWeight.w600,
+                //             color: Colors.green,
+                //           ),
+                //         ),
+                //       ),
+                //     ],
+                //   ),
                 ],
               ),
             ),

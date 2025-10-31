@@ -121,8 +121,9 @@ class AuthService {
       };
 
       if (displayName != null) updateData['displayName'] = displayName;
-      if (profileImageUrl != null)
+      if (profileImageUrl != null) {
         updateData['profileImageUrl'] = profileImageUrl;
+      }
 
       await _firestore.collection('users').doc(user.uid).update(updateData);
     } catch (e) {
