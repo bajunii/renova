@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/colors/colors.dart';
-import '../pages/market_place.dart';
 import '../service/market_service.dart';
 import '../../model/market_model.dart';
 
@@ -93,16 +92,24 @@ class _ArtItemFormState extends State<ArtItemForm> {
       });
 
       // Redirect to marketplace
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MarketPlace()),
-      );
+      Navigator.pop(context);
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
     }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _categoryController.dispose();
+    _priceController.dispose();
+    _descriptionController.dispose();
+    _artistController.dispose();
+    _tagController.dispose();
+    super.dispose();
   }
 
   @override
@@ -137,24 +144,40 @@ class _ArtItemFormState extends State<ArtItemForm> {
                 TextFormField(
                   controller: _categoryController,
                   decoration: const InputDecoration(labelText: 'Category'),
+                  validator: (value) =>
+                      value!.isEmpty ? 'Category is required' : null,
                 ),
                 TextFormField(
                   controller: _priceController,
                   decoration: const InputDecoration(labelText: 'Price'),
                   keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Price is required';
+                    }
+                    final price = double.tryParse(value);
+                    if (price == null || price < 0) {
+                      return 'Enter a valid price';
+                    }
+                    return null;
+                  },
                 ),
                 TextFormField(
                   controller: _descriptionController,
                   decoration: const InputDecoration(labelText: 'Description'),
                   maxLines: 3,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Description is required' : null,
                 ),
                 TextFormField(
                   controller: _artistController,
                   decoration: const InputDecoration(labelText: 'Artist'),
+                  validator: (value) =>
+                      value!.isEmpty ? 'Artist name is required' : null,
                 ),
                 const SizedBox(height: 20),
 
-                // 🔹 Tags input
+                // Tags input
                 Row(
                   children: [
                     Expanded(
@@ -191,7 +214,7 @@ class _ArtItemFormState extends State<ArtItemForm> {
 
                 const SizedBox(height: 24),
 
-                // 🔹 Image upload section (optional)
+                // Image upload section (optional)
                 Card(
                   elevation: 4.0,
                   margin: const EdgeInsets.only(bottom: 20.0),
@@ -225,17 +248,15 @@ class _ArtItemFormState extends State<ArtItemForm> {
                   ),
                 ),
 
-                Center(
+                SizedBox(
+                  width: double.infinity,
                   child: _isLoading
                       ? const CircularProgressIndicator()
                       : ElevatedButton(
                           onPressed: _submitForm,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 40,
-                              vertical: 12,
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),

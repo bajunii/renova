@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/colors/colors.dart';
+import '../widgets/event_tile.dart';
+import '../forms/event_form.dart';
 
 class EventsPage extends StatelessWidget {
   const EventsPage({super.key});
@@ -20,7 +22,21 @@ class EventsPage extends StatelessWidget {
           elevation: 2,
           automaticallyImplyLeading: false,
         ),
-        body: Center(child: Text('Events Page. Comming Soon....')),
+        body: ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: 10,
+          itemBuilder: (context, index) => const EventTile(),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const EventForm()),
+            );
+          },
+          backgroundColor: AppColors.accent,
+          child: const Icon(Icons.add, color: AppColors.background),
+        ),
       ),
     );
   }
