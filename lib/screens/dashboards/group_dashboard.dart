@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../../services/auth_service.dart';
 import '../../services/group_auth_service.dart';
 import '../../utils/app_colors.dart';
 import '../../models/group.dart';
+import '../../models/ecospot.dart';
+import '../../models/weight_record.dart' as wr;
 import '../../services/group_service.dart';
+import '../../services/ecospot_service.dart';
+import '../../services/weight_record_service.dart';
 import '../group_creation_screen.dart';
 import '../login_screen.dart';
 import '../member_selection_screen.dart';
@@ -20,6 +27,12 @@ class _GroupDashboardState extends State<GroupDashboard> {
   final AuthService _authService = AuthService();
   final GroupAuthService _groupAuthService = GroupAuthService();
   int _selectedIndex = 0;
+  
+  // Location state
+  Position? _currentPosition;
+  String? _currentAddress;
+  bool _isLoadingLocation = false;
+  String _locationError = '';
 
   void _onItemTapped(int index) {
     setState(() {
@@ -40,6 +53,240 @@ class _GroupDashboardState extends State<GroupDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
       );
+    }
+  }
+
+  // Location methods
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+      _locationError = '';
+    });
+
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _locationError = 'Location services are disabled. Please enable them.';
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _locationError = 'Location permissions are denied.';
+            _isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _locationError = 'Location permissions are permanently denied.';
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Try to get address from coordinates
+      String address = 'Location retrieved';
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks[0];
+          
+          // Build address from available components
+          List<String> addressParts = [];
+          
+          if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+            addressParts.add(place.subLocality!);
+          }
+          if (place.locality != null && place.locality!.isNotEmpty) {
+            addressParts.add(place.locality!);
+          }
+          if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+            addressParts.add(place.administrativeArea!);
+          }
+          if (place.country != null && place.country!.isNotEmpty) {
+            addressParts.add(place.country!);
+          }
+          
+          if (addressParts.isNotEmpty) {
+            address = addressParts.join(', ');
+          } else {
+            // Fallback to street or name if available
+            if (place.street != null && place.street!.isNotEmpty) {
+              address = place.street!;
+            } else if (place.name != null && place.name!.isNotEmpty) {
+              address = place.name!;
+            } else {
+              address = 'Coordinates: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
+            }
+          }
+        }
+      } catch (geocodingError) {
+        // If geocoding fails, just show coordinates
+        print('Geocoding error: $geocodingError');
+        address = 'Lat: ${position.latitude.toStringAsFixed(4)}, Long: ${position.longitude.toStringAsFixed(4)}';
+      }
+
+      setState(() {
+        _currentPosition = position;
+        _currentAddress = address;
+        _isLoadingLocation = false;
+      });
+    } catch (e) {
+      print('Location error: $e');
+      setState(() {
+        _locationError = 'Failed to get location: ${e.toString()}';
+        _isLoadingLocation = false;
+      });
+    }
+  }
+
+  // Get recent activities for the group
+  Future<List<Map<String, dynamic>>> _getRecentActivities(Group group) async {
+    List<Map<String, dynamic>> activities = [];
+
+    try {
+      // Get recent weight records (last 5)
+      final weightService = WeightRecordService();
+      final weightRecords = await weightService.getRecentWeightRecords(group.id, 5);
+      
+      for (var record in weightRecords) {
+        final timeAgo = _getTimeAgo(record.recordedAt);
+        activities.add({
+          'icon': Icons.scale,
+          'title': '${record.recordedByName} recorded ${record.weightInKg}kg of ${record.materialType.displayName}',
+          'subtitle': '$timeAgo at ${record.ecoSpotName}',
+          'color': Colors.green,
+          'timestamp': record.recordedAt,
+        });
+      }
+
+      // Get recent EcoSpot creations
+      final ecoSpots = await EcoSpotService.getEcoSpotsByGroup(group.id);
+      final recentEcoSpots = ecoSpots
+          .where((spot) => 
+            spot.createdAt.isAfter(DateTime.now().subtract(const Duration(days: 7)))
+          )
+          .take(3)
+          .toList();
+      
+      for (var ecoSpot in recentEcoSpots) {
+        final timeAgo = _getTimeAgo(ecoSpot.createdAt);
+        activities.add({
+          'icon': Icons.place,
+          'title': 'New EcoSpot created: ${ecoSpot.name}',
+          'subtitle': '$timeAgo • ${ecoSpot.typeDisplayName}',
+          'color': Colors.blue,
+          'timestamp': ecoSpot.createdAt,
+        });
+      }
+
+      // Get recent member joins (from group members list)
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('group_organizations')
+          .doc(group.id)
+          .get();
+      
+      if (groupDoc.exists) {
+        final members = groupDoc.data()?['members'] as List<dynamic>?;
+        if (members != null && members.isNotEmpty) {
+          // For new members, we'll show if the group was recently created
+          // or if members count is small (indicating recent growth)
+          final groupCreatedAt = (groupDoc.data()?['createdAt'] as Timestamp?)?.toDate();
+          if (groupCreatedAt != null) {
+            final daysSinceCreation = DateTime.now().difference(groupCreatedAt).inDays;
+            if (daysSinceCreation <= 7) {
+              activities.add({
+                'icon': Icons.group_add,
+                'title': '${members.length} member${members.length != 1 ? "s" : ""} in ${group.groupName}',
+                'subtitle': _getTimeAgo(groupCreatedAt),
+                'color': Colors.orange,
+                'timestamp': groupCreatedAt,
+              });
+            }
+          }
+        }
+      }
+
+      // Get recently updated EcoSpots
+      final activeEcoSpots = ecoSpots
+          .where((spot) => 
+            spot.lastUpdated != null &&
+            spot.lastUpdated!.isAfter(DateTime.now().subtract(const Duration(days: 3)))
+          )
+          .take(3)
+          .toList();
+      
+      for (var ecoSpot in activeEcoSpots) {
+        if (ecoSpot.lastUpdated != null) {
+          final timeAgo = _getTimeAgo(ecoSpot.lastUpdated!);
+          activities.add({
+            'icon': Icons.recycling,
+            'title': 'Activity at ${ecoSpot.name}',
+            'subtitle': '$timeAgo • ${ecoSpot.collectionCount} total collections',
+            'color': Colors.teal,
+            'timestamp': ecoSpot.lastUpdated!,
+          });
+        }
+      }
+
+      // Sort all activities by timestamp (most recent first)
+      activities.sort((a, b) => 
+        (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime)
+      );
+
+      // Return top 10 most recent activities
+      return activities.take(10).toList();
+    } catch (e) {
+      print('Error fetching activities: $e');
+      return [];
+    }
+  }
+
+  // Helper function to format time ago
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      final minutes = difference.inMinutes;
+      return '$minutes minute${minutes != 1 ? "s" : ""} ago';
+    } else if (difference.inHours < 24) {
+      final hours = difference.inHours;
+      return '$hours hour${hours != 1 ? "s" : ""} ago';
+    } else if (difference.inDays < 7) {
+      final days = difference.inDays;
+      return '$days day${days != 1 ? "s" : ""} ago';
+    } else if (difference.inDays < 30) {
+      final weeks = (difference.inDays / 7).floor();
+      return '$weeks week${weeks != 1 ? "s" : ""} ago';
+    } else if (difference.inDays < 365) {
+      final months = (difference.inDays / 30).floor();
+      return '$months month${months != 1 ? "s" : ""} ago';
+    } else {
+      final years = (difference.inDays / 365).floor();
+      return '$years year${years != 1 ? "s" : ""} ago';
     }
   }
 
@@ -247,7 +494,17 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   title: 'Add EcoSpot',
                   color: Colors.green,
                   onTap: () {
-                    // Handle create EcoSpot
+                    // Navigate to EcoSpots tab
+                    setState(() {
+                      _selectedIndex = 1; // EcoSpots tab index
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Tap "New EcoSpot" to create an EcoSpot'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -258,7 +515,17 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   title: 'Schedule Collection',
                   color: Colors.blue,
                   onTap: () {
-                    // Handle create collection event
+                    // Navigate to Collection Events tab
+                    setState(() {
+                      _selectedIndex = 2; // Collection Events tab index
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Tap "New Event" to schedule a collection'),
+                        backgroundColor: Colors.blue,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -269,7 +536,17 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   title: 'Recruit Volunteers',
                   color: Colors.orange,
                   onTap: () {
-                    // Handle recruit volunteers
+                    // Navigate to Members tab
+                    setState(() {
+                      _selectedIndex = 3; // Members tab index
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Invite members to join your group'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -316,23 +593,75 @@ class _GroupDashboardState extends State<GroupDashboard> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildActivityCard(
-            icon: Icons.person_add,
-            title: '5 new members joined Flutter Group',
-            subtitle: '2 hours ago',
-            color: Colors.green,
-          ),
-          _buildActivityCard(
-            icon: Icons.event,
-            title: 'Tech Workshop scheduled for Oct 25',
-            subtitle: '1 day ago',
-            color: Colors.orange,
-          ),
-          _buildActivityCard(
-            icon: Icons.message,
-            title: 'New discussion started in Design Team',
-            subtitle: '3 days ago',
-            color: Colors.blue,
+          FutureBuilder<Group?>(
+            future: _groupAuthService.getCurrentUserGroup(),
+            builder: (context, groupSnapshot) {
+              if (!groupSnapshot.hasData) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              final group = groupSnapshot.data!;
+              return FutureBuilder<List<Map<String, dynamic>>>(
+                future: _getRecentActivities(group),
+                builder: (context, activitiesSnapshot) {
+                  if (!activitiesSnapshot.hasData) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  final activities = activitiesSnapshot.data!;
+                  
+                  if (activities.isEmpty) {
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(Icons.history, size: 48, color: Colors.grey[400]),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No recent activity',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Activity will appear here as your group grows',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: activities.map((activity) {
+                      return _buildActivityCard(
+                        icon: activity['icon'] as IconData,
+                        title: activity['title'] as String,
+                        subtitle: activity['subtitle'] as String,
+                        color: activity['color'] as Color,
+                      );
+                    }).toList(),
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -356,8 +685,19 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 ),
               ),
               TextButton.icon(
-                onPressed: () {
-                  // Handle create new EcoSpot
+                onPressed: () async {
+                  // Get current group first
+                  final group = await _groupAuthService.getCurrentUserGroup();
+                  if (group != null && mounted) {
+                    _showCreateEcoSpotDialog(group);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please create or join a group first'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
                 },
                 icon: const Icon(Icons.add),
                 label: const Text('New EcoSpot'),
@@ -366,40 +706,254 @@ class _GroupDashboardState extends State<GroupDashboard> {
           ),
           const SizedBox(height: 16),
 
-          _buildGroupManagementCard(
-            'Downtown Recycling Hub',
-            'Central District',
-            156,
-            true,
-            Colors.green,
+          // Location Section
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Your Location',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      const Spacer(),
+                      if (!_isLoadingLocation)
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: _getCurrentLocation,
+                          tooltip: 'Refresh location',
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (_isLoadingLocation)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_locationError.isNotEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.error_outline, color: Colors.red),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _locationError,
+                                      style: const TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, 
+                                      size: 16, 
+                                      color: Colors.blue.shade700,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Tip: For web, allow location access in your browser settings.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.blue.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  else if (_currentPosition != null && _currentAddress != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.place,
+                                      size: 20, color: Colors.green),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _currentAddress!,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}, '
+                                'Long: ${_currentPosition!.longitude.toStringAsFixed(6)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    ElevatedButton.icon(
+                      onPressed: _getCurrentLocation,
+                      icon: const Icon(Icons.my_location),
+                      label: const Text('Get Current Location'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-          _buildGroupManagementCard(
-            'School Collection Point',
-            'Educational Zone',
-            89,
-            true,
-            Colors.blue,
-          ),
-          _buildGroupManagementCard(
-            'Community Center EcoSpot',
-            'Residential Area',
-            234,
-            false,
-            Colors.orange,
-          ),
-          _buildGroupManagementCard(
-            'Beach Cleanup Station',
-            'Coastal Area',
-            178,
-            true,
-            Colors.green,
-          ),
-          _buildGroupManagementCard(
-            'Digital Marketing Group',
-            'Marketing',
-            145,
-            false,
-            Colors.orange,
+          const SizedBox(height: 16),
+
+          // EcoSpots List
+          FutureBuilder<Group?>(
+            future: _groupAuthService.getCurrentUserGroup(),
+            builder: (context, groupSnapshot) {
+              if (groupSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              if (!groupSnapshot.hasData || groupSnapshot.data == null) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text('Please create or join a group first'),
+                  ),
+                );
+              }
+
+              final group = groupSnapshot.data!;
+
+              return FutureBuilder<List<EcoSpot>>(
+                future: EcoSpotService.getEcoSpotsByGroup(group.id),
+                builder: (context, ecoSpotSnapshot) {
+                  if (ecoSpotSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  if (ecoSpotSnapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                size: 48, color: Colors.red),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Error loading EcoSpots: ${ecoSpotSnapshot.error}',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final ecoSpots = ecoSpotSnapshot.data ?? [];
+
+                  if (ecoSpots.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(Icons.eco, size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No EcoSpots yet',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Create your first EcoSpot to get started',
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: ecoSpots.map((ecoSpot) {
+                      return _buildEcoSpotCard(ecoSpot);
+                    }).toList(),
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -486,83 +1040,451 @@ class _GroupDashboardState extends State<GroupDashboard> {
   }
 
   Widget _buildMembersTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return FutureBuilder<Group?>(
+      future: _groupAuthService.getCurrentUserGroup(),
+      builder: (context, groupSnapshot) {
+        if (groupSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (!groupSnapshot.hasData || groupSnapshot.data == null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.group_off,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No group found',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please create or join a group first',
+                  style: TextStyle(color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final group = groupSnapshot.data!;
+        final activeMembers =
+            group.members.where((m) => m.isActive).toList();
+        final inactiveMembers =
+            group.members.where((m) => !m.isActive).toList();
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Member Management',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Member Management',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  FutureBuilder<bool>(
+                    future: _groupAuthService.hasPermission('add_members'),
+                    builder: (context, permSnapshot) {
+                      if (permSnapshot.data == true) {
+                        return TextButton.icon(
+                          onPressed: () {
+                            _showAddMembersDialog(group);
+                          },
+                          icon: const Icon(Icons.person_add),
+                          label: const Text('Add Member'),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Member Statistics Card
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatItem(
+                        Icons.people,
+                        'Total Members',
+                        '${group.members.length}',
+                        Colors.blue,
+                      ),
+                      _buildStatItem(
+                        Icons.check_circle,
+                        'Active',
+                        '${activeMembers.length}',
+                        Colors.green,
+                      ),
+                      _buildStatItem(
+                        Icons.cancel,
+                        'Inactive',
+                        '${inactiveMembers.length}',
+                        Colors.orange,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              TextButton.icon(
-                onPressed: () {
-                  // Handle invite members
-                },
-                icon: const Icon(Icons.person_add),
-                label: const Text('Invite'),
-              ),
+              const SizedBox(height: 24),
+
+              // Active Members Section
+              if (activeMembers.isNotEmpty) ...[
+                _buildSectionHeader(
+                  'Active Members (${activeMembers.length})',
+                  Icons.people,
+                ),
+                const SizedBox(height: 12),
+                ...activeMembers.map((member) => _buildRealMemberCard(
+                  member,
+                  group,
+                )),
+                const SizedBox(height: 24),
+              ],
+
+              // Inactive Members Section
+              if (inactiveMembers.isNotEmpty) ...[
+                _buildSectionHeader(
+                  'Inactive Members (${inactiveMembers.length})',
+                  Icons.people_outline,
+                ),
+                const SizedBox(height: 12),
+                ...inactiveMembers.map((member) => _buildRealMemberCard(
+                  member,
+                  group,
+                )),
+              ],
+
+              // Empty state
+              if (group.members.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.person_add,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No members yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Add members to start building your team',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 16),
+        );
+      },
+    );
+  }
 
-          // Search Bar
-          TextField(
-            decoration: InputDecoration(
-              hintText: 'Search members...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.grey[100],
+  Widget _buildStatItem(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 32),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRealMemberCard(GroupMember member, Group group) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: CircleAvatar(
+          radius: 28,
+          backgroundColor: member.isActive
+              ? AppColors.primary
+              : Colors.grey,
+          child: Text(
+            member.name.isNotEmpty ? member.name[0].toUpperCase() : 'U',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 16),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                member.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            if (!member.isActive)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Inactive',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              member.email,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  Icons.badge,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  member.roleDisplayName,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Joined ${_formatDate(member.joinedAt)}',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        trailing: FutureBuilder<bool>(
+          future: _groupAuthService.hasPermission('remove_members'),
+          builder: (context, snapshot) {
+            if (snapshot.data == true && member.role != MemberRole.leader) {
+              return PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) {
+                  if (value == 'remove') {
+                    _showRemoveMemberDialog(group, member);
+                  } else if (value == 'toggle_status') {
+                    _toggleMemberStatus(group, member);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'toggle_status',
+                    child: Row(
+                      children: [
+                        Icon(
+                          member.isActive ? Icons.block : Icons.check_circle,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          member.isActive ? 'Deactivate' : 'Activate',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Remove', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+  }
 
-          // Recent Members
-          _buildSectionHeader('Recent Members', Icons.new_releases),
-          _buildMemberCard(
-            'John Doe',
-            'john.doe@email.com',
-            'Flutter Developers',
-            'Admin',
-            Colors.blue,
-          ),
-          _buildMemberCard(
-            'Jane Smith',
-            'jane.smith@email.com',
-            'UI/UX Design Hub',
-            'Moderator',
-            Colors.purple,
-          ),
-          _buildMemberCard(
-            'Mike Johnson',
-            'mike.j@email.com',
-            'Startup Network',
-            'Member',
-            Colors.green,
-          ),
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
 
-          const SizedBox(height: 24),
+    if (difference.inDays < 1) {
+      return 'Today';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inDays < 30) {
+      return '${(difference.inDays / 7).floor()}w ago';
+    } else if (difference.inDays < 365) {
+      return '${(difference.inDays / 30).floor()}mo ago';
+    } else {
+      return '${(difference.inDays / 365).floor()}y ago';
+    }
+  }
 
-          // Pending Requests
-          _buildSectionHeader('Pending Requests', Icons.pending),
-          _buildPendingRequestCard(
-            'Sarah Wilson',
-            'sarah.w@email.com',
-            'Flutter Developers',
+  Future<void> _toggleMemberStatus(Group group, GroupMember member) async {
+    try {
+      await GroupService.updateMember(
+        group.id,
+        member.userId,
+        isActive: !member.isActive,
+      );
+
+      if (mounted) {
+        setState(() {}); // Refresh the UI
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Member ${member.isActive ? "deactivated" : "activated"} successfully',
+            ),
+            backgroundColor: Colors.green,
           ),
-          _buildPendingRequestCard(
-            'David Chen',
-            'david.chen@email.com',
-            'UI/UX Design Hub',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update member status: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showRemoveMemberDialog(Group group, GroupMember member) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Member'),
+        content: Text(
+          'Are you sure you want to remove ${member.name} from the group?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await GroupService.removeMember(group.id, member.userId);
+                if (mounted) {
+                  Navigator.pop(context);
+                  setState(() {}); // Refresh the UI
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Member removed successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to remove member: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text(
+              'Remove',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -1117,15 +2039,580 @@ class _GroupDashboardState extends State<GroupDashboard> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
   void _showEditGroupDialog(Group group) {
     // TODO: Implement edit group functionality
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Edit group functionality coming soon!')),
     );
+  }
+
+  void _showCreateEcoSpotDialog(Group group) {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController descriptionController = TextEditingController();
+    final TextEditingController locationController = TextEditingController();
+    final TextEditingController contactController = TextEditingController();
+    final TextEditingController hoursController = TextEditingController();
+    
+    EcoSpotType selectedType = EcoSpotType.collectionPoint;
+    List<String> selectedMaterials = [];
+    
+    final List<String> availableMaterials = [
+      'Plastic',
+      'Paper',
+      'Glass',
+      'Metal',
+      'Electronics',
+      'Organic Waste',
+      'Textiles',
+      'Batteries',
+    ];
+
+    // Pre-fill location if available
+    if (_currentAddress != null) {
+      locationController.text = _currentAddress!;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create New EcoSpot'),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.8,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name Field
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'EcoSpot Name *',
+                      hintText: 'e.g., Downtown Recycling Hub',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.label),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Description Field
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Description *',
+                      hintText: 'Describe this EcoSpot...',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.description),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Location Field
+                  TextField(
+                    controller: locationController,
+                    decoration: InputDecoration(
+                      labelText: 'Location *',
+                      hintText: 'Enter address or location',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_on),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.my_location),
+                        onPressed: () {
+                          if (_currentAddress != null) {
+                            locationController.text = _currentAddress!;
+                          } else {
+                            _getCurrentLocation();
+                          }
+                        },
+                        tooltip: 'Use current location',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Type Dropdown
+                  DropdownButtonFormField<EcoSpotType>(
+                    value: selectedType,
+                    decoration: const InputDecoration(
+                      labelText: 'EcoSpot Type',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.category),
+                    ),
+                    items: EcoSpotType.values.map((type) {
+                      return DropdownMenuItem(
+                        value: type,
+                        child: Text(_getEcoSpotTypeDisplay(type)),
+                      );
+                    }).toList(),
+                    onChanged: (EcoSpotType? newType) {
+                      if (newType != null) {
+                        setState(() {
+                          selectedType = newType;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Accepted Materials
+                  const Text(
+                    'Accepted Materials',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: availableMaterials.map((material) {
+                      final isSelected = selectedMaterials.contains(material);
+                      return FilterChip(
+                        label: Text(material),
+                        selected: isSelected,
+                        onSelected: (bool selected) {
+                          setState(() {
+                            if (selected) {
+                              selectedMaterials.add(material);
+                            } else {
+                              selectedMaterials.remove(material);
+                            }
+                          });
+                        },
+                        selectedColor: AppColors.primary.withOpacity(0.3),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Contact Number
+                  TextField(
+                    controller: contactController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Number (Optional)',
+                      hintText: 'Phone number',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Operating Hours
+                  TextField(
+                    controller: hoursController,
+                    decoration: const InputDecoration(
+                      labelText: 'Operating Hours (Optional)',
+                      hintText: 'e.g., Mon-Fri: 9AM-5PM',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.access_time),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                // Validate required fields
+                if (nameController.text.trim().isEmpty ||
+                    descriptionController.text.trim().isEmpty ||
+                    locationController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please fill in all required fields'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  // Show loading
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Creating EcoSpot...'),
+                        ],
+                      ),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+
+                  // Create EcoSpot
+                  await EcoSpotService.createEcoSpot(
+                    name: nameController.text.trim(),
+                    description: descriptionController.text.trim(),
+                    location: locationController.text.trim(),
+                    latitude: _currentPosition?.latitude,
+                    longitude: _currentPosition?.longitude,
+                    groupId: group.id,
+                    groupName: group.groupName,
+                    type: selectedType,
+                    acceptedMaterials: selectedMaterials,
+                    contactNumber: contactController.text.trim().isEmpty
+                        ? null
+                        : contactController.text.trim(),
+                    operatingHours: hoursController.text.trim().isEmpty
+                        ? null
+                        : hoursController.text.trim(),
+                  );
+
+                  if (mounted) {
+                    setState(() {}); // Refresh the UI
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('EcoSpot created successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to create EcoSpot: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                'Create',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRecordWeightDialog(Group group) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Get user profile for name
+    String userName = 'Unknown User';
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (userDoc.exists) {
+        userName = userDoc.data()?['displayName'] ?? 'Unknown User';
+      }
+    } catch (e) {
+      // Use email if display name not available
+      userName = user.email ?? 'Unknown User';
+    }
+
+    // Get list of EcoSpots for this group
+    List<EcoSpot> ecoSpots = [];
+    try {
+      ecoSpots = await EcoSpotService.getEcoSpotsByGroup(group.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load EcoSpots: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (ecoSpots.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please create an EcoSpot first before recording weight data'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    final weightController = TextEditingController();
+    final notesController = TextEditingController();
+    EcoSpot? selectedEcoSpot = ecoSpots.first;
+    wr.MaterialType selectedMaterial = wr.MaterialType.mixed;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Record Weight Data'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // EcoSpot Selection
+                const Text(
+                  'Select EcoSpot',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<EcoSpot>(
+                  value: selectedEcoSpot,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  items: ecoSpots.map((ecoSpot) {
+                    return DropdownMenuItem(
+                      value: ecoSpot,
+                      child: Text(ecoSpot.name),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedEcoSpot = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Material Type Selection
+                const Text(
+                  'Material Type',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<wr.MaterialType>(
+                  value: selectedMaterial,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  items: wr.MaterialType.values.map((material) {
+                    return DropdownMenuItem(
+                      value: material,
+                      child: Row(
+                        children: [
+                          Text(material.icon, style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: 8),
+                          Text(material.displayName),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedMaterial = value!;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Weight Input
+                const Text(
+                  'Weight (kg)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: weightController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    hintText: 'Enter weight in kilograms',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    suffixText: 'kg',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Notes (Optional)
+                const Text(
+                  'Notes (Optional)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: notesController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Add any additional notes...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                // Validate weight input
+                final weightText = weightController.text.trim();
+                if (weightText.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter weight'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                final weight = double.tryParse(weightText);
+                if (weight == null || weight <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a valid weight greater than 0'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                if (selectedEcoSpot == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please select an EcoSpot'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  // Show loading
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Recording weight data...'),
+                        ],
+                      ),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+
+                  // Create weight record
+                  final weightRecord = wr.WeightRecord(
+                    id: '',
+                    groupId: group.id,
+                    ecoSpotId: selectedEcoSpot!.id,
+                    ecoSpotName: selectedEcoSpot!.name,
+                    materialType: selectedMaterial,
+                    weightInKg: weight,
+                    notes: notesController.text.trim().isEmpty
+                        ? null
+                        : notesController.text.trim(),
+                    recordedBy: user.uid,
+                    recordedByName: userName,
+                    recordedAt: DateTime.now(),
+                  );
+
+                  await WeightRecordService().createWeightRecord(weightRecord);
+
+                  if (mounted) {
+                    setState(() {}); // Refresh the UI
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Weight data recorded successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to record weight: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              icon: const Icon(Icons.save, color: Colors.white),
+              label: const Text(
+                'Record',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getEcoSpotTypeDisplay(EcoSpotType type) {
+    switch (type) {
+      case EcoSpotType.recyclingCenter:
+        return 'Recycling Center';
+      case EcoSpotType.collectionPoint:
+        return 'Collection Point';
+      case EcoSpotType.dropOffLocation:
+        return 'Drop-off Location';
+      case EcoSpotType.communityCenter:
+        return 'Community Center';
+      case EcoSpotType.beachCleanup:
+        return 'Beach Cleanup';
+      case EcoSpotType.other:
+        return 'Other';
+    }
   }
 
   void _showAddMembersDialog(Group group) {
@@ -1526,119 +3013,303 @@ class _GroupDashboardState extends State<GroupDashboard> {
   }
 
   Widget _buildAnalyticsContent() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Key Metrics
-          Row(
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Center(child: Text('Please log in to view analytics'));
+    }
+
+    return FutureBuilder<Group?>(
+      future: _groupAuthService.getCurrentUserGroup(),
+      builder: (context, groupSnapshot) {
+        if (!groupSnapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final group = groupSnapshot.data!;
+        final weightService = WeightRecordService();
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _buildMetricCard(
-                  'Recycling Rate',
-                  '78%',
-                  Icons.recycling,
-                  Colors.green,
+              // Action Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showRecordWeightDialog(group),
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text('Record Weight Data', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildMetricCard(
-                  'CO₂ Saved',
-                  '2.4T',
-                  Icons.eco,
-                  Colors.blue,
-                ),
+              const SizedBox(height: 24),
+
+              // Statistics
+              FutureBuilder<Map<String, dynamic>>(
+                future: weightService.getGroupStatistics(group.id),
+                builder: (context, statsSnapshot) {
+                  if (!statsSnapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final stats = statsSnapshot.data!;
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Total Weight',
+                              '${stats['totalWeight'].toStringAsFixed(1)} kg',
+                              Icons.scale,
+                              Colors.green,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'This Month',
+                              '${stats['thisMonthWeight'].toStringAsFixed(1)} kg',
+                              Icons.calendar_today,
+                              Colors.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Total Records',
+                              '${stats['totalRecords']}',
+                              Icons.receipt_long,
+                              Colors.orange,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Avg Weight',
+                              '${stats['averageWeight'].toStringAsFixed(1)} kg',
+                              Icons.analytics,
+                              Colors.purple,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Material Breakdown
+              FutureBuilder<Map<wr.MaterialType, double>>(
+                future: weightService.getTotalWeightByMaterial(group.id),
+                builder: (context, materialSnapshot) {
+                  if (!materialSnapshot.hasData) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final materialTotals = materialSnapshot.data!;
+                  if (materialTotals.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Material Breakdown',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 16),
+                          ...materialTotals.entries.map((entry) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    entry.key.icon,
+                                    style: const TextStyle(fontSize: 24),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          entry.key.displayName,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        LinearProgressIndicator(
+                                          value: entry.value / 
+                                              materialTotals.values.reduce((a, b) => a > b ? a : b),
+                                          backgroundColor: Colors.grey[200],
+                                          color: AppColors.primary,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    '${entry.value.toStringAsFixed(1)} kg',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Recent Records
+              FutureBuilder<List<wr.WeightRecord>>(
+                future: weightService.getRecentWeightRecords(group.id, 10),
+                builder: (context, recordsSnapshot) {
+                  if (!recordsSnapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final records = recordsSnapshot.data!;
+                  if (records.isEmpty) {
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(Icons.scale, size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No weight records yet',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Click "Record Weight Data" to add your first record',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Recent Records',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 16),
+                          ...records.map((record) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[200]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      record.materialType.icon,
+                                      style: const TextStyle(fontSize: 24),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          record.materialType.displayName,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          record.ecoSpotName,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${record.recordedAt.day}/${record.recordedAt.month}/${record.recordedAt.year} • ${record.recordedByName}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    '${record.weightInKg} kg',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  'Active EcoSpots',
-                  '12',
-                  Icons.place,
-                  Colors.orange,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildMetricCard(
-                  'Events/Month',
-                  '8',
-                  Icons.event,
-                  Colors.orange,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Charts Section (Placeholder)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Member Growth',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Chart Placeholder\n📈 Member growth over time',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey, fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Event Attendance',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Chart Placeholder\n📊 Event attendance rates',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey, fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1744,6 +3415,291 @@ class _GroupDashboardState extends State<GroupDashboard> {
     );
   }
 
+  Widget _buildEcoSpotCard(EcoSpot ecoSpot) {
+    Color statusColor;
+    switch (ecoSpot.status) {
+      case EcoSpotStatus.active:
+        statusColor = Colors.green;
+        break;
+      case EcoSpotStatus.inactive:
+        statusColor = Colors.grey;
+        break;
+      case EcoSpotStatus.pending:
+        statusColor = Colors.orange;
+        break;
+      case EcoSpotStatus.suspended:
+        statusColor = Colors.red;
+        break;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          _showEcoSpotDetails(ecoSpot);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: statusColor.withOpacity(0.1),
+                    child: Icon(Icons.eco, color: statusColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ecoSpot.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          ecoSpot.typeDisplayName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      ecoSpot.statusDisplayName,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      ecoSpot.location,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (ecoSpot.acceptedMaterials.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: ecoSpot.acceptedMaterials.take(3).map((material) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        material,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }).toList()
+                    ..addAll(
+                      ecoSpot.acceptedMaterials.length > 3
+                          ? [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: Text(
+                                  '+${ecoSpot.acceptedMaterials.length - 3} more',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              )
+                            ]
+                          : [],
+                    ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.recycling, size: 14, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${ecoSpot.collectionCount} collections',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.arrow_forward_ios, size: 14),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEcoSpotDetails(EcoSpot ecoSpot) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ecoSpot.name),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildEcoSpotDetailRow(Icons.category, 'Type', ecoSpot.typeDisplayName),
+              _buildEcoSpotDetailRow(Icons.location_on, 'Location', ecoSpot.location),
+              if (ecoSpot.description.isNotEmpty)
+                _buildEcoSpotDetailRow(Icons.description, 'Description', ecoSpot.description),
+              if (ecoSpot.contactNumber != null)
+                _buildEcoSpotDetailRow(Icons.phone, 'Contact', ecoSpot.contactNumber!),
+              if (ecoSpot.operatingHours != null)
+                _buildEcoSpotDetailRow(Icons.access_time, 'Hours', ecoSpot.operatingHours!),
+              if (ecoSpot.acceptedMaterials.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Accepted Materials:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: ecoSpot.acceptedMaterials.map((material) {
+                    return Chip(
+                      label: Text(material),
+                      backgroundColor: AppColors.primary.withOpacity(0.1),
+                    );
+                  }).toList(),
+                ),
+              ],
+              const SizedBox(height: 12),
+              _buildEcoSpotDetailRow(
+                Icons.recycling,
+                'Collections',
+                '${ecoSpot.collectionCount}',
+              ),
+              _buildEcoSpotDetailRow(
+                Icons.verified,
+                'Status',
+                ecoSpot.statusDisplayName,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (ecoSpot.status == EcoSpotStatus.active)
+            ElevatedButton.icon(
+              onPressed: () async {
+                try {
+                  await EcoSpotService.incrementCollectionCount(ecoSpot.id);
+                  Navigator.pop(context);
+                  setState(() {}); // Refresh the UI
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Collection recorded!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              icon: const Icon(Icons.add_circle, color: Colors.white),
+              label: const Text(
+                'Record Collection',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEcoSpotDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGroupManagementCard(
     String name,
     String category,
@@ -1787,76 +3743,6 @@ class _GroupDashboardState extends State<GroupDashboard> {
         onTap: () {
           // Handle group management
         },
-      ),
-    );
-  }
-
-  Widget _buildMemberCard(
-    String name,
-    String email,
-    String group,
-    String role,
-    Color color,
-  ) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: Text(
-            name[0].toUpperCase(),
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(name),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Text(email), Text('$group • $role')],
-        ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          // Handle member management
-        },
-      ),
-    );
-  }
-
-  Widget _buildPendingRequestCard(String name, String email, String group) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.orange.withOpacity(0.1),
-          child: Text(
-            name[0].toUpperCase(),
-            style: const TextStyle(
-              color: Colors.orange,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(name),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Text(email), Text('Wants to join: $group')],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.check, color: Colors.green),
-              onPressed: () {
-                // Handle approve
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.red),
-              onPressed: () {
-                // Handle reject
-              },
-            ),
-          ],
-        ),
       ),
     );
   }
