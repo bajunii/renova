@@ -5,7 +5,7 @@ class EventsModel {
   String title;
   String description;
   DateTime date;
-  String location;
+  String venue;
   String? imageUrl;
   DateTime createdAt;
 
@@ -14,7 +14,7 @@ class EventsModel {
     required this.title,
     required this.description,
     required this.date,
-    required this.location,
+    required this.venue,
     this.imageUrl,
     required this.createdAt,
   });
@@ -24,7 +24,7 @@ class EventsModel {
       "title": title,
       "description": description,
       "date": Timestamp.fromDate(date),
-      "location": location,
+      "venue": venue,
       "imageUrl": imageUrl,
       "createdAt": Timestamp.fromDate(createdAt),
     };
@@ -35,7 +35,7 @@ class EventsModel {
     title: '',
     description: '',
     date: DateTime.now(),
-    location: '',
+    venue: '',
     imageUrl: null,
     createdAt: DateTime.now(),
   );
@@ -49,7 +49,7 @@ class EventsModel {
       date: events['date'] is Timestamp
           ? (events['date'] as Timestamp).toDate()
           : DateTime.tryParse(events['date'] ?? '') ?? DateTime.now(),
-      location: events['location'] ?? '',
+      venue: events['venue'] ?? '',
       imageUrl: events['imageUrl'],
       createdAt: events['createdAt'] is Timestamp
           ? (events['createdAt'] as Timestamp).toDate()
