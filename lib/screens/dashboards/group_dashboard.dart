@@ -152,7 +152,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
         _isLoadingLocation = false;
       });
     } catch (e) {
-      print('Location error: $e');
+      debugPrint('Location error: $e');
       setState(() {
         _locationError = 'Failed to get location: ${e.toString()}';
         _isLoadingLocation = false;
