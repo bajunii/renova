@@ -21,9 +21,9 @@ class NavigationService {
         // This is a group organization account
         Map<String, dynamic> orgData = orgDoc.data() as Map<String, dynamic>;
         String? roleString = orgData['role'] as String?;
-        
+
         print('🏢 Organization account found with role: $roleString');
-        
+
         if (roleString == 'group' || roleString == UserRole.group.name) {
           print('🚀 Loading Group Dashboard for organization');
           return const GroupDashboard();
@@ -94,7 +94,8 @@ class NavigationService {
           'description': role.description,
           'userData': orgData,
           'isOrganization': true,
-          'organizationName': orgData['organizationName'] ?? 'Unknown Organization',
+          'organizationName':
+              orgData['organizationName'] ?? 'Unknown Organization',
         };
       }
 

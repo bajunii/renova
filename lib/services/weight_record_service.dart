@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/weight_record.dart';
 
 class WeightRecordService {
@@ -7,7 +8,9 @@ class WeightRecordService {
   // Create a new weight record
   Future<String> createWeightRecord(WeightRecord record) async {
     try {
-      final docRef = await _firestore.collection('weight_records').add(record.toMap());
+      final docRef = await _firestore
+          .collection('weight_records')
+          .add(record.toMap());
       return docRef.id;
     } catch (e) {
       throw Exception('Failed to create weight record: $e');
@@ -65,7 +68,10 @@ class WeightRecordService {
       final snapshot = await _firestore
           .collection('weight_records')
           .where('groupId', isEqualTo: groupId)
-          .where('materialType', isEqualTo: materialType.toString().split('.').last)
+          .where(
+            'materialType',
+            isEqualTo: materialType.toString().split('.').last,
+          )
           .get();
 
       final records = snapshot.docs
@@ -81,15 +87,36 @@ class WeightRecordService {
     }
   }
 
-  // Get total weight by material type for a group
-  Future<Map<MaterialType, double>> getTotalWeightByMaterial(String groupId) async {
+  // Get total weight by material type for a group (optimized)
+  Future<Map<MaterialType, double>> getTotalWeightByMaterial(
+    String groupId,
+  ) async {
     try {
-      final records = await getWeightRecordsByGroup(groupId);
+      // Fetch records with server-side filtering
+      final snapshot = await _firestore
+          .collection('weight_records')
+          .where('groupId', isEqualTo: groupId)
+          .get();
+
       final Map<MaterialType, double> totals = {};
 
-      for (var record in records) {
-        totals[record.materialType] = 
-            (totals[record.materialType] ?? 0) + record.weightInKg;
+      for (var doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          final materialTypeStr = data['materialType'] as String?;
+          final weightInKg = (data['weightInKg'] ?? 0).toDouble();
+
+          if (materialTypeStr != null) {
+            final materialType = MaterialType.values.firstWhere(
+              (e) => e.name == materialTypeStr,
+              orElse: () => MaterialType.mixed,
+            );
+            totals[materialType] = (totals[materialType] ?? 0) + weightInKg;
+          }
+        } catch (e) {
+          debugPrint('Error processing weight record ${doc.id}: $e');
+          continue;
+        }
       }
 
       return totals;
@@ -98,19 +125,48 @@ class WeightRecordService {
     }
   }
 
-  // Get total weight for a time period
+  // Get total weight for a time period (optimized with server-side filtering)
   Future<double> getTotalWeightForPeriod(
     String groupId,
     DateTime startDate,
     DateTime endDate,
   ) async {
     try {
+      // Use Firestore range queries for better performance
+      final snapshot = await _firestore
+          .collection('weight_records')
+          .where('groupId', isEqualTo: groupId)
+          .where(
+            'recordedAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate),
+          )
+          .where(
+            'recordedAt',
+            isLessThanOrEqualTo: Timestamp.fromDate(endDate),
+          )
+          .get();
+
+      double total = 0;
+      for (var doc in snapshot.docs) {
+        final weightInKg = (doc.data()['weightInKg'] ?? 0).toDouble();
+        total += weightInKg;
+      }
+
+      return total;
+    } catch (e) {
+      // Fallback to client-side filtering if Firestore composite index is not available
+      debugPrint(
+        'Using client-side filtering (create composite index for better performance): $e',
+      );
       final records = await getWeightRecordsByGroup(groupId);
-      
-      final filteredRecords = records.where((record) =>
-        record.recordedAt.isAfter(startDate) &&
-        record.recordedAt.isBefore(endDate)
-      ).toList();
+
+      final filteredRecords = records
+          .where(
+            (record) =>
+                !record.recordedAt.isBefore(startDate) &&
+                !record.recordedAt.isAfter(endDate),
+          )
+          .toList();
 
       double total = 0;
       for (var record in filteredRecords) {
@@ -118,13 +174,14 @@ class WeightRecordService {
       }
 
       return total;
-    } catch (e) {
-      throw Exception('Failed to calculate period total: $e');
     }
   }
 
   // Get recent weight records (last N records)
-  Future<List<WeightRecord>> getRecentWeightRecords(String groupId, int limit) async {
+  Future<List<WeightRecord>> getRecentWeightRecords(
+    String groupId,
+    int limit,
+  ) async {
     try {
       final records = await getWeightRecordsByGroup(groupId);
       return records.take(limit).toList();
@@ -134,9 +191,15 @@ class WeightRecordService {
   }
 
   // Update a weight record
-  Future<void> updateWeightRecord(String recordId, Map<String, dynamic> updates) async {
+  Future<void> updateWeightRecord(
+    String recordId,
+    Map<String, dynamic> updates,
+  ) async {
     try {
-      await _firestore.collection('weight_records').doc(recordId).update(updates);
+      await _firestore
+          .collection('weight_records')
+          .doc(recordId)
+          .update(updates);
     } catch (e) {
       throw Exception('Failed to update weight record: $e');
     }
@@ -155,7 +218,7 @@ class WeightRecordService {
   Future<Map<String, dynamic>> getGroupStatistics(String groupId) async {
     try {
       final records = await getWeightRecordsByGroup(groupId);
-      
+
       if (records.isEmpty) {
         return {
           'totalWeight': 0.0,
@@ -171,7 +234,7 @@ class WeightRecordService {
 
       for (var record in records) {
         totalWeight += record.weightInKg;
-        materialCounts[record.materialType] = 
+        materialCounts[record.materialType] =
             (materialCounts[record.materialType] ?? 0) + 1;
       }
 
@@ -188,10 +251,10 @@ class WeightRecordService {
       // Calculate this month's weight
       final now = DateTime.now();
       final startOfMonth = DateTime(now.year, now.month, 1);
-      final thisMonthRecords = records.where((r) => 
-        r.recordedAt.isAfter(startOfMonth)
-      ).toList();
-      
+      final thisMonthRecords = records
+          .where((r) => r.recordedAt.isAfter(startOfMonth))
+          .toList();
+
       double thisMonthWeight = 0;
       for (var record in thisMonthRecords) {
         thisMonthWeight += record.weightInKg;

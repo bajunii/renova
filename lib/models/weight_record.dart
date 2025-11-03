@@ -87,7 +87,7 @@ class WeightRecord {
       ecoSpotId: map['ecoSpotId'] ?? '',
       ecoSpotName: map['ecoSpotName'] ?? '',
       materialType: MaterialType.values.firstWhere(
-        (e) => e.toString() == 'MaterialType.${map['materialType']}',
+        (e) => e.name == map['materialType'],
         orElse: () => MaterialType.mixed,
       ),
       weightInKg: (map['weightInKg'] ?? 0).toDouble(),
@@ -103,7 +103,7 @@ class WeightRecord {
       'groupId': groupId,
       'ecoSpotId': ecoSpotId,
       'ecoSpotName': ecoSpotName,
-      'materialType': materialType.toString().split('.').last,
+      'materialType': materialType.name,
       'weightInKg': weightInKg,
       'notes': notes,
       'recordedBy': recordedBy,

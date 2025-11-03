@@ -27,7 +27,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
   final AuthService _authService = AuthService();
   final GroupAuthService _groupAuthService = GroupAuthService();
   int _selectedIndex = 0;
-  
+
   // Location state
   Position? _currentPosition;
   String? _currentAddress;
@@ -68,7 +68,8 @@ class _GroupDashboardState extends State<GroupDashboard> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         setState(() {
-          _locationError = 'Location services are disabled. Please enable them.';
+          _locationError =
+              'Location services are disabled. Please enable them.';
           _isLoadingLocation = false;
         });
         return;
@@ -103,47 +104,80 @@ class _GroupDashboardState extends State<GroupDashboard> {
       // Try to get address from coordinates
       String address = 'Location retrieved';
       try {
+        debugPrint('Fetching address for: ${position.latitude}, ${position.longitude}');
+        
         List<Placemark> placemarks = await placemarkFromCoordinates(
           position.latitude,
           position.longitude,
         );
 
+        debugPrint('Placemarks found: ${placemarks.length}');
+        
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
           
-          // Build address from available components
-          List<String> addressParts = [];
+          debugPrint('Placemark details:');
+          debugPrint('  - name: ${place.name}');
+          debugPrint('  - street: ${place.street}');
+          debugPrint('  - subLocality: ${place.subLocality}');
+          debugPrint('  - locality: ${place.locality}');
+          debugPrint('  - subAdministrativeArea: ${place.subAdministrativeArea}');
+          debugPrint('  - administrativeArea: ${place.administrativeArea}');
+          debugPrint('  - postalCode: ${place.postalCode}');
+          debugPrint('  - country: ${place.country}');
+
+          // Build address with priority order
+          List<String> addressComponents = [];
           
+          // Add street or name if available
+          if (place.street != null && place.street!.isNotEmpty && place.street != 'Unnamed Road') {
+            addressComponents.add(place.street!);
+          } else if (place.name != null && place.name!.isNotEmpty && place.name != place.locality) {
+            addressComponents.add(place.name!);
+          }
+          
+          // Add sub-locality
           if (place.subLocality != null && place.subLocality!.isNotEmpty) {
-            addressParts.add(place.subLocality!);
-          }
-          if (place.locality != null && place.locality!.isNotEmpty) {
-            addressParts.add(place.locality!);
-          }
-          if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
-            addressParts.add(place.administrativeArea!);
-          }
-          if (place.country != null && place.country!.isNotEmpty) {
-            addressParts.add(place.country!);
+            addressComponents.add(place.subLocality!);
           }
           
-          if (addressParts.isNotEmpty) {
-            address = addressParts.join(', ');
-          } else {
-            // Fallback to street or name if available
-            if (place.street != null && place.street!.isNotEmpty) {
-              address = place.street!;
-            } else if (place.name != null && place.name!.isNotEmpty) {
-              address = place.name!;
-            } else {
-              address = 'Coordinates: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
-            }
+          // Add locality (city)
+          if (place.locality != null && place.locality!.isNotEmpty) {
+            addressComponents.add(place.locality!);
           }
+          
+          // Add administrative area (state/region)
+          if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+            addressComponents.add(place.administrativeArea!);
+          }
+          
+          // Add country
+          if (place.country != null && place.country!.isNotEmpty) {
+            addressComponents.add(place.country!);
+          }
+
+          if (addressComponents.isNotEmpty) {
+            address = addressComponents.join(', ');
+            debugPrint('Final address: $address');
+          } else {
+            // If still no components, use postal code or show general location
+            if (place.postalCode != null && place.postalCode!.isNotEmpty) {
+              address = 'Near ${place.postalCode}';
+            } else {
+              address = 'Current Location (${position.latitude.toStringAsFixed(2)}°, ${position.longitude.toStringAsFixed(2)}°)';
+            }
+            debugPrint('Using fallback address: $address');
+          }
+        } else {
+          debugPrint('No placemarks returned - geocoding may not be available on this platform');
+          // More user-friendly message instead of raw coordinates
+          address = 'Current Location';
         }
       } catch (geocodingError) {
-        // If geocoding fails, just show coordinates
-        print('Geocoding error: $geocodingError');
-        address = 'Lat: ${position.latitude.toStringAsFixed(4)}, Long: ${position.longitude.toStringAsFixed(4)}';
+        // If geocoding fails, show user-friendly message
+        debugPrint('Geocoding error (may need Google Maps API key for web): $geocodingError');
+        // Show simplified coordinates instead of full precision
+        address = 'Current Location';
       }
 
       setState(() {
@@ -167,13 +201,17 @@ class _GroupDashboardState extends State<GroupDashboard> {
     try {
       // Get recent weight records (last 5)
       final weightService = WeightRecordService();
-      final weightRecords = await weightService.getRecentWeightRecords(group.id, 5);
-      
+      final weightRecords = await weightService.getRecentWeightRecords(
+        group.id,
+        5,
+      );
+
       for (var record in weightRecords) {
         final timeAgo = _getTimeAgo(record.recordedAt);
         activities.add({
           'icon': Icons.scale,
-          'title': '${record.recordedByName} recorded ${record.weightInKg}kg of ${record.materialType.displayName}',
+          'title':
+              '${record.recordedByName} recorded ${record.weightInKg}kg of ${record.materialType.displayName}',
           'subtitle': '$timeAgo at ${record.ecoSpotName}',
           'color': Colors.green,
           'timestamp': record.recordedAt,
@@ -183,12 +221,14 @@ class _GroupDashboardState extends State<GroupDashboard> {
       // Get recent EcoSpot creations
       final ecoSpots = await EcoSpotService.getEcoSpotsByGroup(group.id);
       final recentEcoSpots = ecoSpots
-          .where((spot) => 
-            spot.createdAt.isAfter(DateTime.now().subtract(const Duration(days: 7)))
+          .where(
+            (spot) => spot.createdAt.isAfter(
+              DateTime.now().subtract(const Duration(days: 7)),
+            ),
           )
           .take(3)
           .toList();
-      
+
       for (var ecoSpot in recentEcoSpots) {
         final timeAgo = _getTimeAgo(ecoSpot.createdAt);
         activities.add({
@@ -205,19 +245,23 @@ class _GroupDashboardState extends State<GroupDashboard> {
           .collection('group_organizations')
           .doc(group.id)
           .get();
-      
+
       if (groupDoc.exists) {
         final members = groupDoc.data()?['members'] as List<dynamic>?;
         if (members != null && members.isNotEmpty) {
           // For new members, we'll show if the group was recently created
           // or if members count is small (indicating recent growth)
-          final groupCreatedAt = (groupDoc.data()?['createdAt'] as Timestamp?)?.toDate();
+          final groupCreatedAt = (groupDoc.data()?['createdAt'] as Timestamp?)
+              ?.toDate();
           if (groupCreatedAt != null) {
-            final daysSinceCreation = DateTime.now().difference(groupCreatedAt).inDays;
+            final daysSinceCreation = DateTime.now()
+                .difference(groupCreatedAt)
+                .inDays;
             if (daysSinceCreation <= 7) {
               activities.add({
                 'icon': Icons.group_add,
-                'title': '${members.length} member${members.length != 1 ? "s" : ""} in ${group.groupName}',
+                'title':
+                    '${members.length} member${members.length != 1 ? "s" : ""} in ${group.groupName}',
                 'subtitle': _getTimeAgo(groupCreatedAt),
                 'color': Colors.orange,
                 'timestamp': groupCreatedAt,
@@ -229,20 +273,24 @@ class _GroupDashboardState extends State<GroupDashboard> {
 
       // Get recently updated EcoSpots
       final activeEcoSpots = ecoSpots
-          .where((spot) => 
-            spot.lastUpdated != null &&
-            spot.lastUpdated!.isAfter(DateTime.now().subtract(const Duration(days: 3)))
+          .where(
+            (spot) =>
+                spot.lastUpdated != null &&
+                spot.lastUpdated!.isAfter(
+                  DateTime.now().subtract(const Duration(days: 3)),
+                ),
           )
           .take(3)
           .toList();
-      
+
       for (var ecoSpot in activeEcoSpots) {
         if (ecoSpot.lastUpdated != null) {
           final timeAgo = _getTimeAgo(ecoSpot.lastUpdated!);
           activities.add({
             'icon': Icons.recycling,
             'title': 'Activity at ${ecoSpot.name}',
-            'subtitle': '$timeAgo • ${ecoSpot.collectionCount} total collections',
+            'subtitle':
+                '$timeAgo • ${ecoSpot.collectionCount} total collections',
             'color': Colors.teal,
             'timestamp': ecoSpot.lastUpdated!,
           });
@@ -250,14 +298,15 @@ class _GroupDashboardState extends State<GroupDashboard> {
       }
 
       // Sort all activities by timestamp (most recent first)
-      activities.sort((a, b) => 
-        (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime)
+      activities.sort(
+        (a, b) =>
+            (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime),
       );
 
       // Return top 10 most recent activities
       return activities.take(10).toList();
     } catch (e) {
-      print('Error fetching activities: $e');
+      debugPrint('Error fetching activities: $e');
       return [];
     }
   }
@@ -521,7 +570,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Tap "New Event" to schedule a collection'),
+                        content: Text(
+                          'Tap "New Event" to schedule a collection',
+                        ),
                         backgroundColor: Colors.blue,
                         duration: Duration(seconds: 2),
                       ),
@@ -619,14 +670,18 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   }
 
                   final activities = activitiesSnapshot.data!;
-                  
+
                   if (activities.isEmpty) {
                     return Card(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            Icon(Icons.history, size: 48, color: Colors.grey[400]),
+                            Icon(
+                              Icons.history,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(height: 12),
                             Text(
                               'No recent activity',
@@ -761,7 +816,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.error_outline, color: Colors.red),
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.red,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -777,12 +835,15 @@ class _GroupDashboardState extends State<GroupDashboard> {
                                 decoration: BoxDecoration(
                                   color: Colors.blue.shade50,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.blue.shade200),
+                                  border: Border.all(
+                                    color: Colors.blue.shade200,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.info_outline, 
-                                      size: 16, 
+                                    Icon(
+                                      Icons.info_outline,
+                                      size: 16,
                                       color: Colors.blue.shade700,
                                     ),
                                     const SizedBox(width: 8),
@@ -818,8 +879,11 @@ class _GroupDashboardState extends State<GroupDashboard> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.place,
-                                      size: 20, color: Colors.green),
+                                  const Icon(
+                                    Icons.place,
+                                    size: 20,
+                                    color: Colors.green,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -889,7 +953,8 @@ class _GroupDashboardState extends State<GroupDashboard> {
               return FutureBuilder<List<EcoSpot>>(
                 future: EcoSpotService.getEcoSpotsByGroup(group.id),
                 builder: (context, ecoSpotSnapshot) {
-                  if (ecoSpotSnapshot.connectionState == ConnectionState.waiting) {
+                  if (ecoSpotSnapshot.connectionState ==
+                      ConnectionState.waiting) {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.all(32),
@@ -904,8 +969,11 @@ class _GroupDashboardState extends State<GroupDashboard> {
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            const Icon(Icons.error_outline,
-                                size: 48, color: Colors.red),
+                            const Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.red,
+                            ),
                             const SizedBox(height: 16),
                             Text(
                               'Error loading EcoSpots: ${ecoSpotSnapshot.error}',
@@ -1044,9 +1112,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
       future: _groupAuthService.getCurrentUserGroup(),
       builder: (context, groupSnapshot) {
         if (groupSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (!groupSnapshot.hasData || groupSnapshot.data == null) {
@@ -1054,11 +1120,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.group_off,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
+                Icon(Icons.group_off, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
                   'No group found',
@@ -1079,10 +1141,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
         }
 
         final group = groupSnapshot.data!;
-        final activeMembers =
-            group.members.where((m) => m.isActive).toList();
-        final inactiveMembers =
-            group.members.where((m) => !m.isActive).toList();
+        final activeMembers = group.members.where((m) => m.isActive).toList();
+        final inactiveMembers = group.members
+            .where((m) => !m.isActive)
+            .toList();
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -1161,10 +1223,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   Icons.people,
                 ),
                 const SizedBox(height: 12),
-                ...activeMembers.map((member) => _buildRealMemberCard(
-                  member,
-                  group,
-                )),
+                ...activeMembers.map(
+                  (member) => _buildRealMemberCard(member, group),
+                ),
                 const SizedBox(height: 24),
               ],
 
@@ -1175,10 +1236,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   Icons.people_outline,
                 ),
                 const SizedBox(height: 12),
-                ...inactiveMembers.map((member) => _buildRealMemberCard(
-                  member,
-                  group,
-                )),
+                ...inactiveMembers.map(
+                  (member) => _buildRealMemberCard(member, group),
+                ),
               ],
 
               // Empty state
@@ -1236,13 +1296,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
             color: color,
           ),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -1251,16 +1305,12 @@ class _GroupDashboardState extends State<GroupDashboard> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
         leading: CircleAvatar(
           radius: 28,
-          backgroundColor: member.isActive
-              ? AppColors.primary
-              : Colors.grey,
+          backgroundColor: member.isActive ? AppColors.primary : Colors.grey,
           child: Text(
             member.name.isNotEmpty ? member.name[0].toUpperCase() : 'U',
             style: const TextStyle(
@@ -1283,10 +1333,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
             ),
             if (!member.isActive)
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
@@ -1308,19 +1355,12 @@ class _GroupDashboardState extends State<GroupDashboard> {
             const SizedBox(height: 4),
             Text(
               member.email,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(
-                  Icons.badge,
-                  size: 16,
-                  color: AppColors.primary,
-                ),
+                Icon(Icons.badge, size: 16, color: AppColors.primary),
                 const SizedBox(width: 4),
                 Text(
                   member.roleDisplayName,
@@ -1333,10 +1373,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 const Spacer(),
                 Text(
                   'Joined ${_formatDate(member.joinedAt)}',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
                 ),
               ],
             ),
@@ -1365,9 +1402,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          member.isActive ? 'Deactivate' : 'Activate',
-                        ),
+                        Text(member.isActive ? 'Deactivate' : 'Activate'),
                       ],
                     ),
                   ),
@@ -1478,13 +1513,8 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 }
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text(
-              'Remove',
-              style: TextStyle(color: Colors.white),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -2052,10 +2082,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
     final TextEditingController locationController = TextEditingController();
     final TextEditingController contactController = TextEditingController();
     final TextEditingController hoursController = TextEditingController();
-    
+
     EcoSpotType selectedType = EcoSpotType.collectionPoint;
     List<String> selectedMaterials = [];
-    
+
     final List<String> availableMaterials = [
       'Plastic',
       'Paper',
@@ -2159,10 +2189,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   // Accepted Materials
                   const Text(
                     'Accepted Materials',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -2247,7 +2274,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           ),
                           SizedBox(width: 12),
@@ -2351,7 +2380,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please create an EcoSpot first before recording weight data'),
+            content: Text(
+              'Please create an EcoSpot first before recording weight data',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -2429,7 +2460,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
                       value: material,
                       child: Row(
                         children: [
-                          Text(material.icon, style: const TextStyle(fontSize: 20)),
+                          Text(
+                            material.icon,
+                            style: const TextStyle(fontSize: 20),
+                          ),
                           const SizedBox(width: 8),
                           Text(material.displayName),
                         ],
@@ -2452,7 +2486,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: weightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Enter weight in kilograms',
                     border: OutlineInputBorder(
@@ -2502,10 +2538,13 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 }
 
                 final weight = double.tryParse(weightText);
-                if (weight == null || weight <= 0) {
+                // Validate weight with minimum threshold of 0.01 kg (10 grams)
+                if (weight == null || weight < 0.01) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Please enter a valid weight greater than 0'),
+                      content: Text(
+                        'Please enter a valid weight (minimum 0.01 kg)',
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -2534,7 +2573,9 @@ class _GroupDashboardState extends State<GroupDashboard> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           ),
                           SizedBox(width: 12),
@@ -3038,7 +3079,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 child: ElevatedButton.icon(
                   onPressed: () => _showRecordWeightDialog(group),
                   icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text('Record Weight Data', style: TextStyle(color: Colors.white)),
+                  label: const Text(
+                    'Record Weight Data',
+                    style: TextStyle(color: Colors.white),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -3131,7 +3175,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
                         children: [
                           const Text(
                             'Material Breakdown',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           ...materialTotals.entries.map((entry) {
@@ -3146,7 +3193,8 @@ class _GroupDashboardState extends State<GroupDashboard> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           entry.key.displayName,
@@ -3157,8 +3205,11 @@ class _GroupDashboardState extends State<GroupDashboard> {
                                         ),
                                         const SizedBox(height: 4),
                                         LinearProgressIndicator(
-                                          value: entry.value / 
-                                              materialTotals.values.reduce((a, b) => a > b ? a : b),
+                                          value:
+                                              entry.value /
+                                              materialTotals.values.reduce(
+                                                (a, b) => a > b ? a : b,
+                                              ),
                                           backgroundColor: Colors.grey[200],
                                           color: AppColors.primary,
                                         ),
@@ -3176,7 +3227,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
@@ -3200,7 +3251,11 @@ class _GroupDashboardState extends State<GroupDashboard> {
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            Icon(Icons.scale, size: 64, color: Colors.grey[400]),
+                            Icon(
+                              Icons.scale,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(height: 16),
                             Text(
                               'No weight records yet',
@@ -3232,7 +3287,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
                         children: [
                           const Text(
                             'Recent Records',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           ...records.map((record) {
@@ -3260,7 +3318,8 @@ class _GroupDashboardState extends State<GroupDashboard> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           record.materialType.displayName,
@@ -3299,7 +3358,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
@@ -3435,9 +3494,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
@@ -3478,7 +3535,10 @@ class _GroupDashboardState extends State<GroupDashboard> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -3502,10 +3562,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   Expanded(
                     child: Text(
                       ecoSpot.location,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                     ),
                   ),
                 ],
@@ -3515,41 +3572,46 @@ class _GroupDashboardState extends State<GroupDashboard> {
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: ecoSpot.acceptedMaterials.take(3).map((material) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        material,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    );
-                  }).toList()
-                    ..addAll(
-                      ecoSpot.acceptedMaterials.length > 3
-                          ? [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                child: Text(
-                                  '+${ecoSpot.acceptedMaterials.length - 3} more',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
+                  children:
+                      ecoSpot.acceptedMaterials.take(3).map((material) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            material,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList()..addAll(
+                        ecoSpot.acceptedMaterials.length > 3
+                            ? [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  child: Text(
+                                    '+${ecoSpot.acceptedMaterials.length - 3} more',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
-                              )
-                            ]
-                          : [],
-                    ),
+                              ]
+                            : [],
+                      ),
                 ),
               ],
               const SizedBox(height: 8),
@@ -3559,10 +3621,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
                   const SizedBox(width: 4),
                   Text(
                     '${ecoSpot.collectionCount} collections',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const Spacer(),
                   const Icon(Icons.arrow_forward_ios, size: 14),
@@ -3585,14 +3644,34 @@ class _GroupDashboardState extends State<GroupDashboard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildEcoSpotDetailRow(Icons.category, 'Type', ecoSpot.typeDisplayName),
-              _buildEcoSpotDetailRow(Icons.location_on, 'Location', ecoSpot.location),
+              _buildEcoSpotDetailRow(
+                Icons.category,
+                'Type',
+                ecoSpot.typeDisplayName,
+              ),
+              _buildEcoSpotDetailRow(
+                Icons.location_on,
+                'Location',
+                ecoSpot.location,
+              ),
               if (ecoSpot.description.isNotEmpty)
-                _buildEcoSpotDetailRow(Icons.description, 'Description', ecoSpot.description),
+                _buildEcoSpotDetailRow(
+                  Icons.description,
+                  'Description',
+                  ecoSpot.description,
+                ),
               if (ecoSpot.contactNumber != null)
-                _buildEcoSpotDetailRow(Icons.phone, 'Contact', ecoSpot.contactNumber!),
+                _buildEcoSpotDetailRow(
+                  Icons.phone,
+                  'Contact',
+                  ecoSpot.contactNumber!,
+                ),
               if (ecoSpot.operatingHours != null)
-                _buildEcoSpotDetailRow(Icons.access_time, 'Hours', ecoSpot.operatingHours!),
+                _buildEcoSpotDetailRow(
+                  Icons.access_time,
+                  'Hours',
+                  ecoSpot.operatingHours!,
+                ),
               if (ecoSpot.acceptedMaterials.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text(
@@ -3680,10 +3759,7 @@ class _GroupDashboardState extends State<GroupDashboard> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 Text(
                   value,

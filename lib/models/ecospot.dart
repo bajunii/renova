@@ -8,7 +8,7 @@ enum EcoSpotType {
   dropOffLocation,
   communityCenter,
   beachCleanup,
-  other
+  other,
 }
 
 class EcoSpot {
@@ -99,7 +99,9 @@ class EcoSpot {
       'operatingHours': operatingHours,
       'collectionCount': collectionCount,
       'createdAt': Timestamp.fromDate(createdAt),
-      'lastUpdated': lastUpdated != null ? Timestamp.fromDate(lastUpdated!) : null,
+      'lastUpdated': lastUpdated != null
+          ? Timestamp.fromDate(lastUpdated!)
+          : null,
       'isVerified': isVerified,
       'imageUrls': imageUrls,
     };

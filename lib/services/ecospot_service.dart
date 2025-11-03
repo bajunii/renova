@@ -153,9 +153,11 @@ class EcoSpotService {
       // Filter results based on name or location containing the query
       return querySnapshot.docs
           .map((doc) => EcoSpot.fromMap(doc.data()))
-          .where((ecoSpot) =>
-              ecoSpot.name.toLowerCase().contains(query.toLowerCase()) ||
-              ecoSpot.location.toLowerCase().contains(query.toLowerCase()))
+          .where(
+            (ecoSpot) =>
+                ecoSpot.name.toLowerCase().contains(query.toLowerCase()) ||
+                ecoSpot.location.toLowerCase().contains(query.toLowerCase()),
+          )
           .toList();
     } catch (e) {
       throw Exception('Failed to search EcoSpots: $e');
