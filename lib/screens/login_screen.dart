@@ -9,7 +9,6 @@ import 'dashboards/member_dashboard.dart';
 import 'dashboards/group_dashboard.dart';
 import 'member_selection_screen.dart';
 import 'role_based_register_screen.dart';
-import 'organization_registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

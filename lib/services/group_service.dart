@@ -385,6 +385,41 @@ class GroupService {
     }
   }
 
+  // Update member (generic update for any member field)
+  static Future<void> updateMember(
+    String groupId,
+    String memberId, {
+    String? name,
+    String? email,
+    MemberRole? role,
+    bool? isActive,
+  }) async {
+    try {
+      final group = await getGroup(groupId);
+      if (group == null) throw Exception('Group not found');
+
+      final updatedMembers = group.members.map((member) {
+        if (member.userId == memberId) {
+          return GroupMember(
+            userId: member.userId,
+            name: name ?? member.name,
+            email: email ?? member.email,
+            role: role ?? member.role,
+            joinedAt: member.joinedAt,
+            isActive: isActive ?? member.isActive,
+          );
+        }
+        return member;
+      }).toList();
+
+      await updateGroup(groupId, {
+        'members': updatedMembers.map((member) => member.toMap()).toList(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update member: $e');
+    }
+  }
+
   // Deactivate member (don't remove from group, just mark as inactive)
   static Future<void> deactivateMember(String groupId, String memberId) async {
     try {
