@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'widgets/auth_wrapper.dart';
 import 'firebase_options.dart';
-import './features/navigation/admin_navigation.dart';
+// import './features/navigation/admin_navigation.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:window_size/window_size.dart';

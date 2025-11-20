@@ -3,7 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
 import 'dashboards/member_dashboard.dart';
-import 'dashboards/business_dashboard.dart';
+// import 'dashboards/business_dashboard.dart';
+import '/features/navigation/admin_navigation.dart';
 import 'dashboards/group_dashboard.dart';
 import 'organization_registration_screen.dart';
 
@@ -84,7 +85,8 @@ class _RoleBasedRegisterScreenState extends State<RoleBasedRegisterScreen> {
               // This case is already handled above
               return;
             case UserRole.business:
-              dashboard = const BusinessDashboard();
+              // dashboard = const BusinessDashboard();
+              dashboard = const AdminNavigation();
               break;
           }
 

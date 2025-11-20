@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/login_screen.dart';
 import '../services/navigation_service.dart';
+import 'common/app_button.dart';
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -77,11 +78,13 @@ class AuthWrapper extends StatelessWidget {
                           style: TextStyle(color: Colors.grey[600]),
                         ),
                         const SizedBox(height: 16),
-                        ElevatedButton(
+                        AppButton(
+                          label: 'Sign Out',
                           onPressed: () {
                             FirebaseAuth.instance.signOut();
                           },
-                          child: const Text('Sign Out'),
+                          style: AppButtonStyle.outlined,
+                          fullWidth: false,
                         ),
                       ],
                     ),

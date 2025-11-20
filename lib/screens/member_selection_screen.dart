@@ -3,6 +3,10 @@ import '../models/group.dart';
 import '../services/group_auth_service.dart';
 import '../utils/app_colors.dart';
 import 'dashboards/group_dashboard.dart';
+import '../widgets/common/app_card.dart';
+import '../widgets/common/app_avatar.dart';
+import '../widgets/common/app_button.dart';
+import '../widgets/common/app_theme.dart';
 
 class MemberSelectionScreen extends StatefulWidget {
   final Group group;
@@ -86,6 +90,7 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
+        centerTitle: true,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -95,33 +100,28 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
-                  Card(
-                    color: AppColors.primary.withOpacity(0.1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          Icon(Icons.group, size: 48, color: AppColors.primary),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Welcome to ${widget.group.groupName}',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Select which member role you\'re accessing as:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: AppColors.secondaryText,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
+                  AppCard(
+                    color: AppColors.primary.withOpacity(0.06),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 20,
+                      horizontal: 16,
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.group, size: 48, color: AppColors.primary),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Welcome to ${widget.group.groupName}',
+                          style: AppTheme.titleLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Select which member role you\'re accessing as:',
+                          style: AppTheme.body,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   ),
 
@@ -129,38 +129,31 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
 
                   // Members List
                   if (_accessibleMembers.isEmpty)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.warning,
-                              size: 48,
-                              color: AppColors.error,
+                    AppCard(
+                      child: Column(
+                        children: [
+                          Icon(Icons.warning, size: 48, color: AppColors.error),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No Active Members Found',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No Active Members Found',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'There are no active members in this group. Please contact your administrator.',
-                              style: TextStyle(color: AppColors.secondaryText),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'There are no active members in this group. Please contact your administrator.',
+                            style: AppTheme.body,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     )
                   else
                     Column(
                       children: _accessibleMembers.map((member) {
-                        return Card(
+                        return AppCard(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: InkWell(
                             onTap: _selectedMember?.userId == member.userId
@@ -168,25 +161,18 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
                                 : () => _selectMember(member),
                             borderRadius: BorderRadius.circular(8),
                             child: Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(8),
                               child: Row(
                                 children: [
                                   // Avatar
-                                  CircleAvatar(
-                                    radius: 24,
+                                  AppAvatar(
+                                    initials: member.name.isNotEmpty
+                                        ? member.name[0].toUpperCase()
+                                        : 'U',
                                     backgroundColor: _getRoleColor(member.role),
-                                    child: Text(
-                                      member.name.isNotEmpty
-                                          ? member.name[0].toUpperCase()
-                                          : 'U',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                    radius: 26,
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: 14),
 
                                   // Member Info
                                   Expanded(
@@ -196,12 +182,9 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
                                       children: [
                                         Text(
                                           member.name,
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                          style: AppTheme.titleMedium,
                                         ),
-                                        const SizedBox(height: 4),
+                                        const SizedBox(height: 6),
                                         Text(
                                           member.roleDisplayName,
                                           style: TextStyle(
@@ -213,10 +196,7 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                           member.email,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.secondaryText,
-                                          ),
+                                          style: AppTheme.body,
                                         ),
                                       ],
                                     ),
@@ -248,25 +228,20 @@ class _MemberSelectionScreenState extends State<MemberSelectionScreen> {
                   const SizedBox(height: 24),
 
                   // Sign Out Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        await _groupAuthService.signOut();
-                        if (mounted) {
-                          Navigator.pushNamedAndRemoveUntil(
-                            context,
-                            '/login',
-                            (route) => false,
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Sign Out'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
+                  AppButton(
+                    label: 'Sign Out',
+                    icon: const Icon(Icons.logout),
+                    style: AppButtonStyle.outlined,
+                    onPressed: () async {
+                      await _groupAuthService.signOut();
+                      if (mounted) {
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          '/login',
+                          (route) => false,
+                        );
+                      }
+                    },
                   ),
                 ],
               ),

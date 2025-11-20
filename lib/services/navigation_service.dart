@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_role.dart';
 import '../screens/dashboards/member_dashboard.dart';
 import '../screens/dashboards/group_dashboard.dart';
-import '../screens/dashboards/business_dashboard.dart';
+// import '../screens/dashboards/business_dashboard.dart';
+import '../features/navigation/admin_navigation.dart';
 import '../screens/dashboard_screen.dart';
 
 class NavigationService {
@@ -54,7 +55,8 @@ class NavigationService {
               return const GroupDashboard();
             case UserRole.business:
               print('🚀 Loading Business Dashboard');
-              return const BusinessDashboard();
+              // return const BusinessDashboard();
+              return const AdminNavigation();
           }
         }
       }
