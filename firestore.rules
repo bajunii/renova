@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read and write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow users to read other users' basic info (for group management, etc.)
+    match /users/{userId} {
+      allow read: if request.auth != null && 
+        resource.data.keys().hasAny(['displayName', 'email', 'role', 'profileImageUrl']);
+    }
+    
+    // Groups collection - allow read for authenticated users, write for group admins
+    match /groups/{groupId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == resource.data.createdBy || 
+         request.auth.uid in resource.data.admins);
+    }
+    
+    // Events collection - allow read for authenticated users, write for event creators
+    match /events/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == resource.data.createdBy || 
+         request.auth.uid in resource.data.organizers);
+    }
+    
+    // Organizations collection - allow read for members, write for admins
+    match /organizations/{orgId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        request.auth.uid in resource.data.admins;
+    }
+    
+    // Admin-only collections (only business/admin role can access)
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business';
+    }
+    
+    // System logs and analytics (business admins only)
+    match /analytics/{document=**} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'business';
+    }
+    
+    // Default deny rule for all other documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

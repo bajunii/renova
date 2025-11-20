@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'widgets/auth_wrapper.dart';
 import 'firebase_options.dart';
 import './features/navigation/admin_navigation.dart';
 import 'dart:io' show Platform;
@@ -8,9 +9,6 @@ import 'package:window_size/window_size.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -47,16 +45,39 @@ void setupWindow() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Renova',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+//         colorScheme: ColorScheme.fromSeed(
+//           seedColor: Colors.deepPurple,
+//           brightness: Brightness.light,
+//         ),
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+        cardTheme: CardThemeData(
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      home: const AuthWrapper(),
+      // Uncomment for quick local testing instead of AuthWrapper:
+      // home: const Center(child: Text('Welcome to Renova!')),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: AdminNavigation(),
+      // home: AdminNavigation(),
     );
   }
 }
