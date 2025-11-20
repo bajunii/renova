@@ -51,10 +51,10 @@ class MyApp extends StatelessWidget {
       title: 'Renova',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-//         colorScheme: ColorScheme.fromSeed(
-//           seedColor: Colors.deepPurple,
-//           brightness: Brightness.light,
-//         ),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         cardTheme: CardThemeData(
@@ -75,8 +75,6 @@ class MyApp extends StatelessWidget {
       home: const AuthWrapper(),
       // Uncomment for quick local testing instead of AuthWrapper:
       // home: const Center(child: Text('Welcome to Renova!')),
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-      ),
       // home: AdminNavigation(),
     );
   }
