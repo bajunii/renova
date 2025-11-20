@@ -1,0 +1,72 @@
+[
+  {
+    "title": "Bottle Cap Mosaic",
+    "imageUrl": "https://example.com/images/bottle_cap_mosaic.jpg",
+    "category": "recycled",
+    "price": 45.50,
+    "description": "A vibrant wall mosaic crafted entirely from discarded bottle caps, showcasing creative recycling.",
+    "artist": "Jane Mwangi",
+    "createdAt": "2025-10-01T10:00:00Z",
+    "tags": ["mosaic", "bottle caps", "colorful", "eco-art"]
+  },
+  {
+    "title": "Tire Flower Pot",
+    "imageUrl": "https://example.com/images/tire_flower_pot.jpg",
+    "category": "upcycled",
+    "price": 25.00,
+    "description": "An old car tire transformed into a stylish garden pot with a fresh coat of eco-friendly paint.",
+    "artist": "Peter Otieno",
+    "createdAt": "2025-09-28T14:30:00Z",
+    "tags": ["garden", "planter", "tire", "green living"]
+  },
+  {
+    "title": "Glass Bottle Lamp",
+    "imageUrl": "https://example.com/images/glass_bottle_lamp.jpg",
+    "category": "upcycled",
+    "price": 60.00,
+    "description": "A handmade table lamp created from used glass bottles, emitting warm ambient light.",
+    "artist": "Lucy Achieng",
+    "createdAt": "2025-09-22T09:15:00Z",
+    "tags": ["lamp", "lighting", "bottle art", "handcrafted"]
+  },
+  {
+    "title": "Banana Fiber Basket",
+    "imageUrl": "https://example.com/images/banana_fiber_basket.jpg",
+    "category": "handmade",
+    "price": 35.00,
+    "description": "A durable handwoven basket made from dried banana fibers, ideal for decor or storage.",
+    "artist": "Mary Njeri",
+    "createdAt": "2025-09-25T11:45:00Z",
+    "tags": ["basket", "woven", "eco", "banana fiber"]
+  },
+  {
+    "title": "Driftwood Sculpture",
+    "imageUrl": "https://example.com/images/driftwood_sculpture.jpg",
+    "category": "recycled",
+    "price": 120.00,
+    "description": "Abstract sculpture carved from collected driftwood pieces, symbolizing nature’s resilience.",
+    "artist": "Samuel Kibet",
+    "createdAt": "2025-10-02T08:20:00Z",
+    "tags": ["driftwood", "sculpture", "nature", "recycled art"]
+  },
+  {
+    "title": "Paper Bead Necklace",
+    "imageUrl": "https://example.com/images/paper_bead_necklace.jpg",
+    "category": "handmade",
+    "price": 20.00,
+    "description": "Beautiful necklace crafted from rolled paper beads sealed with eco-friendly varnish.",
+    "artist": "Angela Wambui",
+    "createdAt": "2025-10-05T13:00:00Z",
+    "tags": ["jewelry", "necklace", "paper beads", "fashion"]
+  },
+  {
+    "title": "Plastic Spoon Chandelier",
+    "imageUrl": "https://example.com/images/plastic_spoon_chandelier.jpg",
+    "category": "recycled",
+    "price": 80.00,
+    "description": "An elegant chandelier designed using upcycled plastic spoons and LED lights.",
+    "artist": "Kelvin Ochieng",
+    "createdAt": "2025-10-03T16:00:00Z",
+    "tags": ["lighting", "plastic", "chandelier", "recycled decor"]
+  }
+]
